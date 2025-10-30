@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL データベースサービス
+  postgres-db:
+    image: postgres:latest
+    hostname: postgresql
+    environment:
+      POSTGRES_USER: rimodeck
+      POSTGRES_PASSWORD: rimodeck
+      POSTGRES_DB: rimodeckdb
+      TZ: Asia/Tokyo
+    volumes:
+      - ./database/db-data:/var/lib/postgresql
+
+  # 2. Go バックエンドサーバーサービス（API）
+  go-server:
+    hostname: go-server
+    build:
+      context: ./go-server
+      dockerfile: ./Dockerfile
+      target: develop
+    container_name: go-server
+    image: go-server:latest
+    restart: always
+    ports:
+      - "6060:6060" # 開発用ポート（必要に応じて8080などに変更推奨）
+    volumes:
+      - ./go-server/src:/app/src 
+    tty : true
+
+  # 3. React フロントエンドサービス
+  react-app:
+    hostname: react-app
+    build:
+      context: ./react-app
+      dockerfile: ./Dockerfile
+      target: development-dependencies-env
+    container_name: react-app
+    restart: always
+    ports:
+      - "3000:3000" # 一般的なReact開発サーバーのポートに変更
+    volumes:
+      - ./react-app:/app # ソースコードをマウント
+

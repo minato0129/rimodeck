@@ -1,0 +1,7 @@
+FROM golang:1.25.3-bookworm as Develop
+
+WORKDIR /app/src
+
+RUN apt update  \
+    && apt install -y wget curl git \
+

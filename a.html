@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebカメラQRコードリーダー</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        /* スキャナー表示エリアのスタイル（任意） */
+        #qr-reader {
+            width: 100%;
+            max-width: 500px;
+            margin: 20px auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        #qr-reader-results {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #eee;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Webカメラを使ったQRコードリーダー</h1>
+
+    <div id="qr-reader"></div>
+
+    <div id="qr-reader-results">
+        <p>スキャン結果:</p>
+    </div>
+
+    <script>
+        function docReady(fn) {
+            // DOMContentLoadedを待つヘルパー関数
+            if (document.readyState === "complete" || document.readyState === "interactive") {
+                setTimeout(fn, 1);
+            } else {
+                document.addEventListener("DOMContentLoaded", fn);
+            }
+        }
+
+        docReady(function() {
+            var lastResult, countResults = 0;
+            const resultContainer = document.getElementById('qr-reader-results');
+
+            // 成功時のコールバック関数
+            function onScanSuccess(decodedText, decodedResult) {
+                // 同じ結果が連続してスキャンされるのを防ぐ
+                if (decodedText !== lastResult) {
+                    ++countResults;
+                    lastResult = decodedText;
+                    
+                    // 結果の表示を更新
+                    resultContainer.innerHTML = `
+                        <p>スキャン結果:</p>
+                        <div>[${countResults}] - <b>${decodedText}</b></div>
+                    `;
+
+                    // (オプション) スキャン成功後、すぐにスキャナーを停止する
+                    // html5QrcodeScanner.clear();
+                }
+            }
+
+            // スキャナーのインスタンス化
+            var html5QrcodeScanner = new Html5QrcodeScanner(
+                "qr-reader", // スキャナーを表示するHTML要素のID
+                { 
+                    fps: 10,    // スキャン頻度
+                    qrbox: { width: 250, height: 250 } // スキャンエリアのサイズ
+                },
+                /* verbose= */ false
+            );
+
+            // スキャナーの描画を開始し、Webカメラを起動
+            html5QrcodeScanner.render(onScanSuccess, (errorMessage) => {
+                 // エラーハンドリング（カメラが利用できない場合など）
+            });
+        });
+    </script>
+
+</body>
+</html>
