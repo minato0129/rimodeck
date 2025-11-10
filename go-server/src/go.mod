@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.24.9
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.13.4
 	gorm.io/driver/postgres v1.6.0

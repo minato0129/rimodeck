@@ -3,6 +3,8 @@ package main
 import (
 	"net/http"
 	"os"
+	"rimodeck/controllers"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -18,6 +20,8 @@ func InitServer() {
 	server.POST("/", func(ctx echo.Context) error {
 		return ctx.String(http.StatusOK, "Hello, World!")
 	})
+
+	server.POST("/sinup",controllers.SignUp)
 
 	// サーバー起動
 	server.Logger.Fatal(server.Start(os.Getenv("GO_URL")))
