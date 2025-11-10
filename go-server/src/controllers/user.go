@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"rimodeck/services"
 
 	"github.com/labstack/echo/v4"
 )
@@ -13,11 +14,21 @@ type LoginData struct {
 
 //アカウント作成
 func SignUp(ctx echo.Context) error {	
-	data := LoginData{}
+	LoginData := LoginData{}
 
-	if err := ctx.Bind(&data); err != nil {
-		return ctx.String(http.StatusBadRequest, "Invalid input")
+	if err := ctx.Bind(&LoginData); err != nil {
+		return ctx.JSON(http.StatusBadRequest, "Invalid input")
 	}
-	
-	return ctx.String(http.StatusOK, "SignUp endpoint")
+
+	err := services.CreateUser(LoginData.Username,LoginData.Password)
+	if err != nil {
+		return ctx.JSON(http.StatusInternalServerError, err.Error())
+	}
+
+	return ctx.JSON(http.StatusOK, "SignUp endpoint")
+}
+
+func SignIn(ctx echo.Context) error {
+
+	return ctx.JSON(http.StatusOK, "SignIn endpoint")
 }

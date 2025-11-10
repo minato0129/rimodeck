@@ -7,21 +7,16 @@ import (
 
 
 func  CreateUser(username, password string) error {
+	//uidを生成
 	uid,err := utils.Genid()
 	if err != nil {
 		return err	
 	}
 
-	//パスワードをハッシュ化
-	passwordHash, err := utils.EncryptPassword(password)
-	if err != nil {
-		return err
-	}
-
 	Create := models.Users{
 		UserID: uid,
 		Name:   username,
-		Pass:   passwordHash,
+		Pass:   password,
 		Slides: []models.Slides{},
 	}
 
@@ -30,4 +25,12 @@ func  CreateUser(username, password string) error {
     }
 
 	return nil
+}
+
+var users_filter models.Users
+
+func UserExists(username string,password string) (int64, error) {
+	count := db.Where(models.Users{Name:username,Pass:password}).First(&users_filter).RowsAffected
+
+	return count, nil
 }
