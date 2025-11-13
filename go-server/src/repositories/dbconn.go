@@ -22,6 +22,12 @@ func Init() {
 
 	// グローバル変数に格納
 	db = dbconn
+
+	// データベースの中身をリセット
+	db.Migrator().DropTable(&models.Users{})
+	db.Migrator().DropTable(&models.Slides{})
+	db.Migrator().DropTable(&models.Peages{})
+	db.Migrator().DropTable(&models.Questions{})
 	
 	// マイグレーションを実行
 	db.AutoMigrate(&models.Users{})
