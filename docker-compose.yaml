@@ -4,7 +4,6 @@ services:
   # 1. PostgreSQL データベースサービス
   postgres-db:
     image: postgres:latest
-    hostname: postgresql
     environment:
       POSTGRES_USER: rimodeck
       POSTGRES_PASSWORD: rimodeck
