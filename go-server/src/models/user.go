@@ -4,8 +4,7 @@ package models
 type Users struct {
 	UserID string `gorm:"primaryKey"` // userid
 	Name   string
-	Pass   string // パスワードは適切にハッシュ化して保存する必要があります
-	// Userは複数のSlideを持つ
+	Pass   string // パスワードはハッシュ化
 	Slides []Slides `gorm:"foreignKey:UserID"`
 }
 
