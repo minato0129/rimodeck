@@ -2,8 +2,7 @@ package main
 
 import (
 	"log"
-	models "rimodeck/repositories"
-
+	"rimodeck/repositories"
 	"github.com/joho/godotenv"
 )
 
@@ -22,7 +21,7 @@ func Init() {
 	//ENV を読み込み
 	loadEnv()
 	//データベース接続、マイグレーション
-	models.Init()
+	repositories.Init()
 	
 }
 
