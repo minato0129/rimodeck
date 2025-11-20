@@ -1,10 +1,12 @@
 package main
 
-import "rimodeck/tests"
+import (
+
+)
 
 func main() {
 	// 初期化
-	Init()
+	// Init()
 
 	// // サーバー起動
 	// mainServer()
@@ -21,6 +23,7 @@ func mainServer(){
 }
 
 func Debug() {
-	tests.Test()
+	web_main()
+	// tests.Test()
 }
 

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>WebSocket</title>
+</head>
+
+<body>
+    <p id="output"></p>
+
+    <input type="text" id="inputId" placeholder="id"><br>
+
+    <input type="text" id="inputMessage" placeholder="text">
+
+
+    <button id="sendButton">送信</button>
+
+    <script>
+        var uri = 'ws://localhost:1323/ws';
+
+        ws = new WebSocket(uri)
+
+        var inputid = document.getElementById('inputId')
+        var inputmsg = document.getElementById('inputMessage');
+        var sendButton = document.getElementById('sendButton');
+
+
+        ws.onopen = function () {
+            console.log('Connected');
+            const MessageConnect = {
+                type: 'connect',
+                data: 'Hello, Server!'
+            };
+        ws.send(JSON.stringify(MessageConnect));
+        }
+
+        ws.onmessage = function (evt) {
+            var out = document.getElementById('output');
+            out.innerHTML += evt.data + '<br>';
+        }
+
+        function sendMessage() {
+            var id = inputid.value;
+            var message = inputmsg.value; // 入力された値を取得
+            
+            // 値が空でなければ送信      
+            const messageObject = {
+                type: 'user_message',
+                id:   id,
+                data: message,
+            };
+
+            ws.send(JSON.stringify(messageObject));
+
+            output.innerHTML +=  id + 'に' + message + 'を送信しました<br>'; // 送信したメッセージを画面に表示
+            inputmsg.value = ''; // 送信後、入力フィールドをクリア
+        }
+
+        sendButton.addEventListener('click', sendMessage);
+
+    </script>
+</body>
+
+</html>
