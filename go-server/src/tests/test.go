@@ -9,7 +9,6 @@ func Test() {
 	err := services.CreateUser("testuser", "testpassword")
 	if err != nil {
 		log.Print(err)
-		return
 	}
 
 	log.Print("User1 created successfully")
@@ -17,18 +16,15 @@ func Test() {
 	err = services.CreateUser("testuser", "testpassword")
 	if err != nil {
 		log.Print(err)
-		return
 	}
 		
 	log.Print("User2 created successfully")
 
-
-	err = services.LoginUser("testuser", "testpassword")
-	if err != nil {
+	result := services.LoginUser("testuser", "testpassword")
+	if result.Error != nil {
 		log.Print(err)
-		return
 	}
 	log.Print("User logged in successfully")
-
+	log.Print(result)
 
 }
