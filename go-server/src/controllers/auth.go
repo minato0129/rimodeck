@@ -36,9 +36,9 @@ func Login(ctx echo.Context) error {
 		return ctx.JSON(http.StatusBadRequest, "Invalid input")
 	}
 
-	err := services.LoginUser(LoginData.Username, LoginData.Password)
-	if err != nil {
-		return ctx.JSON(http.StatusInternalServerError, err.Error())
+	result := services.LoginUser(LoginData.Username, LoginData.Password)
+	if result.Error != nil {
+		return ctx.JSON(http.StatusInternalServerError, result.Error.Error())
 	}
 
 	return ctx.JSON(http.StatusOK, "Login endpoint")

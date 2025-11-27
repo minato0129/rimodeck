@@ -22,6 +22,6 @@ func Init() {
 	loadEnv()
 	//データベース接続、マイグレーション
 	repositories.Init()
-	
+
 }
 
