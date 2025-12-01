@@ -5,11 +5,7 @@ package models
 // 	PeageNum int  // ページ番号
 // 	SlideID  uint // 外部キー
 // 	Memo     string
-
-// 	// Peageは1つのSlideに属する
-// 	Slide Slides `gorm:"foreignKey:SlideID"`
-
-// 	// Peageは複数のQuestionを持つ
+// 	Slide Slides `gorm:"foreignKey:SlideID"`// Peageは1つのSlideに属する
 // 	Questions []Questions `gorm:"foreignKey:PageID"` // pageidがPeageIDに対応すると想定
 // }
 
@@ -22,9 +18,6 @@ package models
 // 	// Questionは1つのPeageに属する
 // 	Peage Peages `gorm:"foreignKey:PageID"`
 // }
-
-
-
 // type Slides struct {
 // 	SlideID   string `gorm:"primaryKey"` // slideid
 // 	UserID    string // 外部キー
@@ -33,7 +26,6 @@ package models
 // 	User Users `gorm:"foreignKey:UserID"`
 // 	Peages []Peages `gorm:"foreignKey:SlideID"`
 // }
-
 // type Users struct {
 // 	UserID string `gorm:"primaryKey"` // userid
 // 	Name   string

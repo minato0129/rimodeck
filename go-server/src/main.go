@@ -21,6 +21,7 @@ func mainServer(){
 }
 
 func Debug() {
+	upload() 
 	tests.Test()
 }
 
