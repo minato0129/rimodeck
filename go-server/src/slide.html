@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>りもでっく - プレゼンテーションビューア</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs" type="module"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs" type="module"></script>
+    <script type="module">
+        import { GlobalWorkerOptions } from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+        // Workerパスを設定
+        GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+    </script>
+    <style>
+        /* PDFビューアとノートを横並びにするためのスタイル */
+        .viewer-container {
+            /* ビューア:ノートを3:1の割合で分割 */
+            display: grid;
+            grid-template-columns: 3fr 1fr; 
+            height: 100vh;
+        }
+        #pdf-viewer-area {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #1f2937; /* ダークな背景 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <div class="viewer-container">
+        <div id="pdf-viewer-area" class="relative">
+            <canvas id="pdf-canvas" class="max-w-full max-h-full shadow-2xl"></canvas>
+            
+            <div id="control-bar" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-4 p-3 bg-gray-800 bg-opacity-70 rounded-xl shadow-xl text-white">
+                <button id="prev-btn" class="p-2 hover:bg-gray-700 rounded-full transition"><span class="material-symbols-outlined">arrow_back</span></button>
+                <div class="flex items-center space-x-1 text-sm font-semibold">
+                    <span id="current-page">1</span> / <span id="total-pages">0</span>
+                </div>
+                <button id="next-btn" class="p-2 hover:bg-gray-700 rounded-full transition"><span class="material-symbols-outlined">arrow_forward</span></button>
+                <button id="fullscreen-btn" class="p-2 hover:bg-gray-700 rounded-full transition"><span class="material-symbols-outlined">fullscreen</span></button>
+                
+                </div>
+        </div>
+
+        <div id="note-area" class="p-6 bg-white border-l border-gray-200 overflow-y-auto">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">スライドノート</h2>
+            <div class="mb-4 text-sm text-gray-600">
+                現在のスライド: <span id="note-current-page">1</span> / <span id="note-total-pages">0</span>
+            </div>
+            
+            <textarea id="slide-note-content" class="w-full h-80 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm resize-none" placeholder="このスライドに関するメモを入力してください..." rows="10"></textarea>
+            
+            <button id="save-note-btn" class="mt-4 w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition duration-150">
+                <span class="material-symbols-outlined text-base mr-1 align-middle">save</span>
+                <span class="align-middle">ノートを保存</span>
+            </button>
+            <p id="save-status" class="mt-2 text-sm text-center text-gray-500">ノートを読み込み中...</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { getDocument } from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+
+        let pdfDoc = null;
+        let currentPage = 1;
+        let totalPages = 0;
+        let pdfUrl = '';
+        let saveTimeout; // ノートの自動保存用タイマー
+
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+        const noteTextarea = document.getElementById('slide-note-content');
+        const saveButton = document.getElementById('save-note-btn');
+        const saveStatus = document.getElementById('save-status');
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // URLからPDFパスを取得
+            const params = new URLSearchParams(window.location.search);
+            pdfUrl = params.get('pdf');
+
+            if (!pdfUrl) {
+                alert('PDFファイルが指定されていません。');
+                return;
+            }
+
+            // PDF読み込み
+            try {
+                const loadingTask = getDocument(pdfUrl);
+                pdfDoc = await loadingTask.promise;
+                totalPages = pdfDoc.numPages;
+                
+                // ページ数の表示を更新
+                document.getElementById('total-pages').textContent = totalPages;
+                document.getElementById('note-total-pages').textContent = totalPages;
+                
+                // 初回ページレンダリング
+                renderPage(currentPage);
+            } catch (error) {
+                console.error('Error loading PDF:', error);
+                alert('PDFファイルの読み込みに失敗しました。');
+            }
+
+            // イベントリスナー設定
+            document.getElementById('prev-btn').addEventListener('click', () => changePage(-1));
+            document.getElementById('next-btn').addEventListener('click', () => changePage(1));
+            document.getElementById('fullscreen-btn').addEventListener('click', toggleFullscreen);
+
+            // ノートのイベントリスナー
+            saveButton.addEventListener('click', saveNote);
+            
+            noteTextarea.addEventListener('input', () => {
+                // オートセーブタイマーをリセット
+                clearTimeout(saveTimeout);
+                saveStatus.textContent = "入力中...";
+                saveButton.disabled = true;
+
+                // 2秒間入力がなければ自動保存
+                saveTimeout = setTimeout(() => {
+                    saveNote();
+                }, 2000); 
+            });
+        });
+
+        // ページレンダリング関数
+        async function renderPage(num) {
+            if (!pdfDoc) return;
+            if (num < 1 || num > totalPages) {
+                // ページ範囲外の場合は何もしない
+                return; 
+            }
+
+            currentPage = num;
+            document.getElementById('current-page').textContent = currentPage;
+            document.getElementById('note-current-page').textContent = currentPage;
+            
+            // ページデータの取得
+            const page = await pdfDoc.getPage(num);
+            // ビューポートを取得 (ここではスケール1を使用)
+            const viewport = page.getViewport({ scale: 1 }); 
+
+            // キャンバスサイズをビューポートに合わせる
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            // PDFレンダリング
+            const renderContext = {
+                canvasContext: ctx,
+                viewport: viewport,
+            };
+            await page.render(renderContext).promise;
+            
+            // ノートの取得と表示
+            getAndShowNote(currentPage);
+        }
+
+        // ページ切り替え関数
+        function changePage(delta) {
+            const newPage = currentPage + delta;
+            renderPage(newPage);
+        }
+
+        // フルスクリーン切り替え関数 (簡易的な実装)
+        function toggleFullscreen() {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                document.getElementById('pdf-viewer-area').requestFullscreen();
+            }
+        }
+
+        /**
+         * サーバーからノートを取得し、表示する関数
+         * @param {number} pageIndex 現在のページ番号
+         */
+        async function getAndShowNote(pageIndex) {
+            noteTextarea.value = ''; // ロード中は一度クリア
+            saveStatus.textContent = "ノートを読み込み中...";
+            saveButton.disabled = true;
+            
+            try {
+                // Goサーバーの /note エンドポイントにGETリクエスト
+                const response = await fetch(`/note?pdf=${encodeURIComponent(pdfUrl)}&page=${pageIndex}`);
+                if (!response.ok) throw new Error('Failed to fetch note');
+                
+                const data = await response.json();
+                
+                // ノートの内容を表示
+                noteTextarea.value = data.note || ''; 
+                saveStatus.textContent = "ノートがロードされました。";
+            } catch (error) {
+                console.error('Error fetching note:', error);
+                saveStatus.textContent = "ノートの読み込みに失敗しました。";
+            } finally {
+                saveButton.disabled = false;
+            }
+        }
+
+        /**
+         * ノートをサーバーに保存する関数
+         */
+        window.saveNote = async function() {
+            clearTimeout(saveTimeout); // オートセーブをキャンセル
+            saveStatus.textContent = "保存中...";
+            saveButton.disabled = true;
+
+            const noteContent = noteTextarea.value;
+            
+            try {
+                // Goサーバーの /note エンドポイントにPOSTリクエスト
+                const response = await fetch('/note', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        pdf_path: pdfUrl, 
+                        page_index: currentPage, // 数値型として送信
+                        content: noteContent 
+                    }),
+                });
+
+                if (!response.ok) throw new Error('Failed to save note');
+                
+                saveStatus.textContent = `保存完了 (${new Date().toLocaleTimeString()})`;
+            } catch (error) {
+                console.error('Error saving note:', error);
+                saveStatus.textContent = "保存失敗";
+            } finally {
+                saveButton.disabled = false;
+            }
+        };
+
+        // 💡 必要に応じて、WebSocket関連のロジック (Remote Control機能) をここに追加してください。
+    </script>
+</body>
+</html>

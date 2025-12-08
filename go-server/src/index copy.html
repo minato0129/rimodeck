@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html class="light" lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RIMODECK</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs" type="module"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs" type="module"></script>
+<script type="module">
+  import { GlobalWorkerOptions } from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+  // Workerパスをモジュールとして設定
+  GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+</script>
+
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#3498db",
+                        secondary: "#f1f1f1",
+                        accent: "#e74c3c",
+                        "text-primary": "#333333",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101922",
+                    },
+                    fontFamily: {
+                        display: ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem",
+                        lg: "0.5rem",
+                        xl: "0.75rem",
+                        full: "9999px"
+                    },
+                },
+            },
+        };
+</script>
+<style>
+/* PDF表示用のキャンバスをレスポンシブにするためのスタイル */
+#pdf-canvas-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden; 
+}
+canvas {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+/* Fullscreen API で全画面表示になったときのスタイル */
+#presentation-main:-webkit-full-screen {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+#presentation-main:-moz-full-screen {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+#presentation-main:-ms-fullscreen {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+#presentation-main:fullscreen {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+</style>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark font-display flex h-screen flex-col overflow-hidden text-text-primary dark:text-white">
+  
+<header class="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 dark:border-gray-700 dark:bg-background-dark">
+    <div class="flex items-center gap-2">
+        <h1 class="text-xl font-bold">RIMODECK</h1>
+    </div>
+    <div class="flex items-center gap-4">
+        <span id="page-indicator" class="text-md font-medium text-gray-700 dark:text-gray-300">
+            ページ <span id="current-page-num">0</span> / <span id="total-pages">0</span>
+        </span>
+        <button class="flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-white transition-colors hover:bg-primary/80" onclick="document.getElementById('qr-popup').classList.remove('hidden')">
+            <span class="material-symbols-outlined text-xl">qr_code_scanner</span>
+            <span class="ml-2 hidden text-sm font-medium sm:inline">リモートで操作</span>
+        </button>
+    </div>
+</header>
+  
+<div class="flex flex-1 min-h-0">
+    
+        <main id="presentation-main" class="relative flex min-h-0 w-full flex-col overflow-hidden rounded-lg bg-white dark:bg-background-dark shadow-xl lg:min-h-full">
+        <div id="pdf-canvas-container" class="flex flex-1 items-center justify-center p-4">
+            <canvas id="pdf-canvas"></canvas>
+            <div id="loading-text" class="absolute text-xl font-bold">PDFを読み込み中...</div>
+            </div>
+
+        </main>
+    
+    <aside class="hidden w-80 shrink-0 flex-col gap-4 border-l border-gray-200 bg-background-light p-4 dark:border-gray-700 dark:bg-background-dark lg:flex">
+        <h3 class="text-lg font-semibold">スライドサムネイル</h3>
+        <div class="flex-1 space-y-3 overflow-y-auto" id="thumbnail-area">
+            <div class="text-sm text-gray-500">PDF.jsのサムネイル表示機能は省略しています。</div>
+        </div>
+        <div class="border-t border-gray-200 pt-4 dark:border-gray-700">
+            <h3 class="text-lg font-semibold mb-2">スライドメモ</h3>
+            <details class="group" open>
+                <summary class="flex cursor-pointer items-center justify-between rounded-lg bg-secondary/50 p-2 text-sm font-medium transition-colors hover:bg-secondary/70 dark:bg-background-dark/50 dark:hover:bg-background-dark/70">
+                    メモ
+                    <span class="material-symbols-outlined transition-transform group-open:rotate-180">expand_more</span>
+                </summary>
+                <textarea class="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-transparent p-2 text-sm font-normal text-text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" placeholder="このスライドに関するメモを追加..." rows="5"></textarea>
+            </details>
+        </div>
+    </aside>
+
+</div>
+
+<div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50" id="qr-popup">
+    <div class="relative w-full max-w-sm rounded-xl bg-white dark:bg-background-dark p-8 shadow-lg">
+        <button class="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" onclick="document.getElementById('qr-popup').classList.add('hidden')">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+        <div class="flex flex-col items-center gap-6 text-center">
+            <h2 class="text-2xl font-bold text-text-primary dark:text-white">サーバーと接続</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+                スマートフォンでQRコードをスキャンして接続します
+            </p>
+            <div id="qr-code-container" class="h-64 w-64 flex items-center justify-center bg-white p-2 border border-gray-200 rounded-lg">
+                <p class="text-xs text-gray-400">QRコードを生成中...</p>
+            </div>
+            
+            <div class="flex w-full items-center justify-center rounded-lg bg-yellow-500/20 p-2 text-sm font-medium text-yellow-700 dark:text-yellow-300" id="connection-status">
+                <span class="mr-2 h-2.5 w-2.5 rounded-full bg-yellow-500"></span>
+                <span id="status-text">接続IDを発行中...</span>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400" id="viewer-id-display">ID: (接続後に表示)</p>
+        </div>
+      </div>
+</div>
+
+<div id="click-overlay" class="fixed inset-0 z-[100] hidden cursor-pointer bg-black/70 text-white flex items-center justify-center" onclick="handleFullscreenToggle()">
+    <div class="text-center p-8 border border-white rounded-xl">
+        <span class="material-symbols-outlined text-6xl mb-4">computer</span>
+        <p class="text-xl font-bold">プレゼンテーションを開始するには、<br>この画面をクリックしてください</p>
+    </div>
+</div>
+<script type="module">
+    import { getDocument } from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+
+    // --- WebSocket Variables ---
+    let ws = null;
+    let viewerId = null;
+
+    // --- PDF.js Variables ---
+    let pdfDoc = null;
+    let currentPageNum = 0; // 0から開始
+    const scale = 1.5; // レンダリング倍率
+    const pdfCanvas = document.getElementById('pdf-canvas');
+    const ctx = pdfCanvas.getContext('2d');
+    const loadingText = document.getElementById('loading-text');
+
+    // --- PDF Rendering Functions ---
+
+    /**
+     * 指定されたページ番号のPDFをレンダリングします
+     * @param {number} num 
+     */
+    async function renderPage(num) {
+        if (!pdfDoc) return;
+
+        // ページ番号のバリデーションと更新
+        if (num < 1 || num > pdfDoc.numPages) {
+            console.log(`Page number ${num} is out of bounds (1 to ${pdfDoc.numPages}).`);
+            return;
+        }
+
+        currentPageNum = num;
+        
+        // ページインジケータの更新
+        document.getElementById('current-page-num').textContent = currentPageNum;
+        
+        // ページの取得とレンダリング
+        try {
+            const page = await pdfDoc.getPage(num);
+            // 現在のウィンドウサイズに基づいてビューポートを再計算する
+            const element = document.getElementById('presentation-main');
+            const aspectRatio = page.getViewport({ scale: 1 }).width / page.getViewport({ scale: 1 }).height;
+            const targetWidth = element.clientWidth;
+            const targetHeight = element.clientHeight;
+            
+            let viewScale = 1;
+            if (targetWidth / targetHeight > aspectRatio) {
+                // 画面が横長すぎるときは高さに合わせる
+                viewScale = targetHeight / page.getViewport({ scale: 1 }).height;
+            } else {
+                // 画面が縦長すぎるときは幅に合わせる
+                viewScale = targetWidth / page.getViewport({ scale: 1 }).width;
+            }
+            
+            // 全画面時は余白がないので少しスケールアップしてもよいが、ここではシンプルに
+            const viewport = page.getViewport({ scale: viewScale * 0.95 }); // 95%のスケールでマージンを確保
+
+            pdfCanvas.height = viewport.height;
+            pdfCanvas.width = viewport.width;
+
+            const renderContext = {
+                canvasContext: ctx,
+                viewport: viewport,
+            };
+
+            await page.render(renderContext).promise;
+            console.log(`Page ${num} rendered.`);
+        } catch (error) {
+            console.error('Error rendering page:', error);
+        }
+    }
+
+    /**
+     * PDFファイルを読み込みます
+     */
+    async function loadPdf() {
+        loadingText.textContent = 'PDFを読み込み中...';
+        try {
+            const pdfURL = 'assets/pr.pdf'; // main.goで設定したパス
+            const loadingTask = getDocument(pdfURL);
+            pdfDoc = await loadingTask.promise;
+            
+            document.getElementById('total-pages').textContent = pdfDoc.numPages;
+            loadingText.classList.add('hidden'); // ロード中のテキストを非表示に
+
+            // 最初のページをレンダリング
+            if (pdfDoc.numPages > 0) {
+                renderPage(1);
+            }
+        } catch (error) {
+            console.error('Error loading PDF:', error);
+            loadingText.textContent = 'PDFの読み込みに失敗しました。ファイルが正しく配置されているか確認してください。';
+        }
+    }
+
+    // --- Slide Control Functions ---
+
+    function nextSlide() {
+        if (pdfDoc && currentPageNum < pdfDoc.numPages) {
+            renderPage(currentPageNum + 1);
+        } else {
+            console.log("Already on the last page.");
+        }
+    }
+
+    function prevSlide() {
+        if (currentPageNum > 1) {
+            renderPage(currentPageNum - 1);
+        } else {
+            console.log("Already on the first page.");
+        }
+    }
+    
+    /**
+     * 全画面表示を開始
+     */
+    function requestFullscreen() {
+        const element = document.getElementById('presentation-main'); // PDFコンテンツ領域のみをターゲットにする
+
+        if (element.requestFullscreen) {
+            element.requestFullscreen();
+        } else if (element.mozRequestFullScreen) { /* Firefox */
+            element.mozRequestFullScreen();
+        } else if (element.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
+            element.webkitRequestFullscreen();
+        } else if (element.msRequestFullscreen) { /* IE/Edge */
+            element.msRequestFullscreen();
+        } else {
+            alert("お使いのブラウザは全画面表示をサポートしていません。F11キーをお試しください。");
+        }
+    }
+
+    /**
+     * 全画面表示を終了
+     */
+    function exitFullscreen() {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.mozCancelFullScreen) { /* Firefox */
+            document.mozCancelFullScreen();
+        } else if (document.webkitExitFullscreen) { /* Chrome, Safari and Opera */
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) { /* IE/Edge */
+            document.msExitFullscreen();
+        }
+    }
+
+    // ★追加機能: 全画面切り替えボタンのクリックイベントハンドラ
+    /**
+     * ユーザーのクリック操作で全画面表示をトグルします。
+     * これは、ブラウザのセキュリティ制限を回避するために、Remoteからの指示で表示されるオーバーレイ用です。
+     */
+    window.handleFullscreenToggle = function() {
+        const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+        
+        if (isFullscreen) {
+            exitFullscreen();
+        } else {
+            requestFullscreen();
+        }
+        
+        // オーバーレイを隠す
+        document.getElementById('click-overlay').classList.add('hidden');
+    }
+
+    // --- Event Listeners for Fullscreen State ---
+
+    /**
+     * 全画面モードの切り替え時に呼び出されるハンドラ。
+     * 全画面終了時にページを再レンダリングして描画崩れを防ぐ。
+     */
+    function handleFullscreenChange() {
+        // document.fullscreenElement が null の場合、全画面モードが終了したことを意味する
+        if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
+            console.log("Fullscreen exited. Forcing page resize/re-render.");
+            
+            // 全画面終了時に、全画面開始を促すオーバーレイが表示されていたら非表示にする
+             document.getElementById('click-overlay').classList.add('hidden');
+            
+            // 現在のページを再レンダリングし、ビューポートサイズの変化に対応
+            if (currentPageNum > 0) {
+                renderPage(currentPageNum);
+            }
+        } else {
+            // 全画面開始時も再レンダリングをかけることで、正しい表示にリセット
+             if (currentPageNum > 0) {
+                renderPage(currentPageNum);
+            }
+        }
+    }
+
+    // ★全画面表示の終了イベントを監視
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    // --- WebSocket Logic ---
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        // PDFの読み込みを開始
+        loadPdf();
+
+        const uri = `ws://${window.location.host}/ws`;
+        ws = new WebSocket(uri);
+        const statusDiv = document.getElementById('connection-status');
+        const statusSpan = document.getElementById('status-text');
+        const qrCodeContainer = document.getElementById('qr-code-container');
+        const viewerIdDisplay = document.getElementById('viewer-id-display');
+
+        ws.onopen = function () {
+            console.log('Viewer Connected');
+        };
+
+        ws.onmessage = function (evt) {
+            try {
+                // 1. 接続時にサーバーから送られるViewer IDの処理
+                if (viewerId === null && evt.data.startsWith('{"type":') === false) { 
+                    viewerId = evt.data;
+                    console.log('Viewer ID:', viewerId);
+                    
+                    // QRコード生成ロジック
+                    const remoteUrl = `http://${window.location.host}/remote?id=${viewerId}`;
+                    
+                    // qrcode.jsを使用してQRコードを生成
+                    qrCodeContainer.innerHTML = ''; // 既存のメッセージをクリア
+                    if (typeof QRCode !== 'undefined') {
+                        new QRCode(qrCodeContainer, {
+                            text: remoteUrl,
+                            width: 256,
+                            height: 256,
+                            colorDark : "#000000",
+                            colorLight : "#ffffff",
+                            correctLevel : QRCode.CorrectLevel.H
+                        });
+                    } else {
+                        qrCodeContainer.innerHTML = `<p class="text-xs text-red-500">QRコードライブラリのロードに失敗しました。</p>`;
+                    }
+                    
+                    viewerIdDisplay.textContent = `ID: ${viewerId}`;
+
+                    // 接続待機中メッセージを更新
+                    if(statusDiv && statusSpan) {
+                       statusDiv.classList.remove('bg-yellow-500/20');
+                       statusDiv.classList.add('bg-green-500/20');
+                       statusDiv.querySelector('.bg-yellow-500').classList.replace('bg-yellow-500', 'bg-green-500');
+                       statusSpan.textContent = '接続IDが発行されました';
+                    }
+                    return;
+                }
+                
+                // 2. RemoteからのJSON操作メッセージ
+                const message = JSON.parse(evt.data);
+                console.log('Received JSON:', message);
+
+                if (message.type === 'remote_control' && message.status === 200) {
+                    switch (message.data) {
+                        case 'next':
+                            nextSlide();
+                            break;
+                        case 'prev':
+                            prevSlide();
+                            break;
+                        case 'fullscreen_start': // 全画面開始コマンド
+                            // ブラウザ制限を回避するため、Viewer上のクリックを促す
+                            document.getElementById('click-overlay').classList.remove('hidden');
+                            break;
+                        case 'fullscreen_end': // 全画面終了コマンド
+                            // 全画面終了はプログラムから実行できる
+                            exitFullscreen();
+                            break;
+                        default:
+                            console.log('Unknown remote command:', message.data);
+                    }
+                } else if (message.type === 'error') {
+                    console.error('WebSocket Error:', message.data);
+                }
+
+            } catch (e) {
+                // ID受信以外の非JSONメッセージはエラーとして扱う
+                console.error("Received unexpected message or error:", e, evt.data);
+            }
+        };
+
+        ws.onclose = function () {
+            console.log('Viewer Disconnected');
+            statusSpan.textContent = '切断されました';
+            statusDiv.classList.remove('bg-green-500/20');
+            statusDiv.classList.add('bg-red-500/20');
+            statusDiv.querySelector('.bg-green-500').classList.replace('bg-green-500', 'bg-red-500');
+        };
+
+        ws.onerror = function (error) {
+            console.error('WebSocket Error:', error);
+            statusSpan.textContent = 'エラーが発生しました';
+            statusDiv.classList.remove('bg-green-500/20');
+            statusDiv.classList.add('bg-red-500/20');
+            statusDiv.querySelector('.bg-green-500').classList.replace('bg-green-500', 'bg-red-500');
+        };
+    });
+</script>
+<script nomodule>
+    // ブラウザがES Modulesをサポートしていない場合へのフォールバック
+</script>
+</body>
+</html>

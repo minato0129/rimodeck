@@ -1,8 +1,6 @@
 package main
 
-import (
-
-)
+import "rimodeck/repositories"
 
 func main() {
 	// 初期化
@@ -23,6 +21,7 @@ func mainServer(){
 }
 
 func Debug() {
+	repositories.Init()
 	web_main()
 	// tests.Test()
 }

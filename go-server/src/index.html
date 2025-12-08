@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>りもでっく</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs" type="module"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs" type="module"></script>
+    <script type="module">
+        import { GlobalWorkerOptions } from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+        // Workerパスを設定
+        GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+    </script>
+
+    <style>
+        .pdf-placeholder {
+            /* 画像の雰囲気を再現するためのグラデーションとシャドウ */
+            background: linear-gradient(135deg, #f0f4f8 0%, #e0e7ee 100%);
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem 0.5rem 0 0;
+            overflow: hidden;
+        }
+        .pdf-canvas-thumb {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* キャンバスが枠内に収まるように調整 */
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        /* JSで表示/非表示を制御するためのクラス */
+        .dropdown-menu-visible {
+            display: block !important;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-blue': '#1e88e5', 
+                        'bg-light': '#f5f7fa',
+                        'text-dark': '#3c4043',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-bg-light font-sans min-h-screen">
+
+    <header class="bg-white shadow-md">
+        <div class="container mx-auto flex h-16 items-center justify-between px-6">
+            <div class="flex items-center space-x-4">
+                <span class="text-xl font-bold text-primary-blue">りもでっく</span>
+            </div>
+            <div class="flex items-center space-x-4">
+                
+                <label for="pdf-upload-input" class="flex items-center rounded-full bg-primary-blue px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-blue-700 transition duration-150 cursor-pointer" id="upload-label">
+                    <span class="material-symbols-outlined text-base mr-1">cloud_upload</span>
+                    プレゼンテーションをアップロード
+                </label>
+                <input type="file" id="pdf-upload-input" accept="application/pdf" style="display: none;" onchange="uploadFile(this.files[0])">
+
+                <div class="relative">
+                    <button class="h-8 w-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 transition duration-150">
+                        <span class="material-symbols-outlined">person</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-6 py-8">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-semibold text-text-dark">マイプレゼンテーション</h1>
+            
+            <div class="flex items-center space-x-4">
+                <div class="relative">
+                    <input type="text" placeholder="検索..." class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue w-64 text-sm">
+                    <span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-lg">search</span>
+                </div>
+                <div class="flex border border-gray-300 rounded-lg overflow-hidden">
+                    <button class="p-2 bg-gray-200 text-gray-700 hover:bg-gray-300">
+                        <span class="material-symbols-outlined text-lg">grid_view</span>
+                    </button>
+                    <button class="p-2 text-gray-500 hover:bg-gray-100">
+                        <span class="material-symbols-outlined text-lg">view_list</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="pdf-list-container" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <div id="loading-pdfs" class="col-span-full text-center py-10 text-gray-500">
+                <p class="mb-2"><span class="material-symbols-outlined animate-spin text-xl">progress_activity</span></p>
+                <p>ファイル一覧を読み込み中...</p>
+            </div>
+        </div>
+        
+        <p class="mt-8 text-sm text-red-500 hidden" id="pdf-error-message"></p>
+    </main>
+
+    <script type="module">
+        import { getDocument } from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+
+        document.addEventListener('DOMContentLoaded', getAndShowPdfList);
+        
+        // 🌟 新規追加: ドキュメント全体をクリックしたときに、開いているメニューを閉じる
+        document.addEventListener('click', function(e) {
+            // クリックされた要素がドロップダウンメニューやそのトリガーボタンの一部でない場合
+            if (!e.target.closest('.pdf-card-menu')) {
+                document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                    menu.classList.remove('dropdown-menu-visible');
+                });
+            }
+        });
+
+
+        /**
+         * 指定されたPDFの最初のページをレンダリングし、Canvas IDに挿入します。
+         * @param {string} pdfUrl 
+         * @param {string} canvasId 
+         */
+        async function renderPdfThumbnail(pdfUrl, canvasId) {
+            const canvas = document.getElementById(canvasId);
+            // エラー時のフォールバックを初期化 (ローディング中の白い画面を防ぐ)
+            if (!canvas) return; 
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#f0f4f8';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            try {
+                const loadingTask = getDocument(pdfUrl);
+                const pdf = await loadingTask.promise;
+                const page = await pdf.getPage(1); // 1ページ目を取得
+
+                // レンダリングする解像度を設定 (速度優先で0.5)
+                const viewport = page.getViewport({ scale: 0.5 }); 
+                
+                // キャンバスのサイズをPDFの比率に合わせて調整
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport,
+                };
+
+                await page.render(renderContext).promise;
+            } catch (error) {
+                console.error(`Error rendering thumbnail for ${pdfUrl}:`, error);
+                // エラー時はフォールバック表示
+                ctx.fillStyle = '#f0f4f8';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#6b7280';
+                ctx.font = '16px sans-serif';
+                ctx.fillText('ロード失敗', 10, 30);
+            }
+        }
+
+        /**
+         * サーバーからPDF一覧を取得し、カードとして表示します。
+         */
+        async function getAndShowPdfList() {
+            const listContainer = document.getElementById('pdf-list-container');
+            const loadingElement = document.getElementById('loading-pdfs');
+            const errorMessage = document.getElementById('pdf-error-message');
+            
+            // loadingElementが存在し、かつ listContainer の子である場合のみ切り離す
+            if (loadingElement && loadingElement.parentNode === listContainer) {
+                listContainer.removeChild(loadingElement);
+            }
+
+            // コンテナをクリアする
+            listContainer.innerHTML = ''; 
+            
+            // ローディング要素を再追加し、表示を元に戻す
+            if (loadingElement) {
+                listContainer.appendChild(loadingElement);
+            }
+            
+            if (loadingElement) {
+                loadingElement.style.display = 'block';
+            }
+            
+            errorMessage.classList.add('hidden');
+
+            try {
+                const response = await fetch('/pdfs');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const pdfFiles = await response.json(); 
+                
+                if (loadingElement) {
+                    loadingElement.style.display = 'none';
+                }
+                
+                listContainer.innerHTML = ''; 
+
+                if (pdfFiles.length === 0) {
+                     listContainer.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500">assetsフォルダにPDFファイルが見つかりません。</div>';
+                     return;
+                }
+
+                const renderPromises = [];
+
+                pdfFiles.forEach((pdfUrl, index) => {
+                    const fileName = pdfUrl.split('/').pop(); 
+                    const fileNameWithoutExt = fileName.replace(/\.pdf$/i, '');
+                    const canvasId = `pdf-canvas-${index}`;
+                    
+                    const card = document.createElement('div');
+                    // 🌟 'group'クラスを削除し、純粋なカードスタイルを適用
+                    card.className = 'bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 relative cursor-pointer'; 
+                    
+                    // カード全体をクリックしたときの動作 (ビューアへの遷移)
+                    card.onclick = (e) => {
+                        // 🌟 メニューアイコンまたはメニュー自体がクリックされた場合は遷移しない
+                        if (e.target.closest('.pdf-card-menu')) {
+                            return;
+                        }
+                        window.location.href = `/viewer?pdf=${encodeURIComponent(pdfUrl)}`;
+                    };
+
+                    card.innerHTML = `
+                        <div class="pdf-placeholder">
+                            <canvas id="${canvasId}" class="pdf-canvas-thumb"></canvas>
+                        </div>
+                        
+                        <div class="p-4">
+                            <div class="absolute top-2 right-2 pdf-card-menu">
+                                <button class="p-1 text-gray-400 hover:text-gray-600 rounded-full bg-white/70 hover:bg-white transition menu-trigger">
+                                    <span class="material-symbols-outlined text-base pointer-events-none">more_vert</span>
+                                </button>
+                                <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 hidden dropdown-menu z-10">
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 delete-action">
+                                        <span class="material-symbols-outlined text-sm mr-2 align-middle text-red-500">delete</span>
+                                        <span class="align-middle">ファイルを削除</span>
+                                    </a>
+                                </div>
+                            </div>
+                            
+                            <p class="text-sm font-medium text-text-dark truncate">${fileNameWithoutExt}</p>
+                            <p class="text-xs text-gray-500 mt-1">
+                                ${Math.floor(Math.random() * 4) + 1}週間前
+                            </p>
+                        </div>
+                    `;
+                    listContainer.appendChild(card);
+                    
+                    // 🌟 メニューの表示/非表示を切り替えるイベントリスナーを追加
+                    const menuTrigger = card.querySelector('.menu-trigger');
+                    const dropdownMenu = card.querySelector('.dropdown-menu');
+
+                    if (menuTrigger && dropdownMenu) {
+                        menuTrigger.addEventListener('click', (e) => {
+                            e.stopPropagation(); // 親要素のカードクリックイベントを停止
+                            
+                            // 他の開いているメニューをすべて閉じる
+                            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                                if (menu !== dropdownMenu) {
+                                    menu.classList.remove('dropdown-menu-visible');
+                                }
+                            });
+
+                            // このメニューの表示をトグル
+                            dropdownMenu.classList.toggle('dropdown-menu-visible');
+                        });
+                    }
+                    
+                    // 削除アクションをボタンにバインド
+                    const deleteButton = card.querySelector('.delete-action');
+                    if (deleteButton) {
+                        deleteButton.onclick = (e) => {
+                            e.preventDefault(); 
+                            e.stopPropagation(); // 親要素のカードクリックイベントを停止
+                            deletePdfFile(pdfUrl);
+                        };
+                    }
+
+                    // サムネイルレンダリングを非同期で開始
+                    renderPromises.push(renderPdfThumbnail(pdfUrl, canvasId));
+                });
+                
+                Promise.allSettled(renderPromises).then(() => {
+                    console.log('All PDF thumbnails processed.');
+                });
+
+            } catch (error) {
+                console.error('Failed to fetch PDF list:', error);
+                
+                if (loadingElement) {
+                    loadingElement.style.display = 'none';
+                }
+                
+                listContainer.innerHTML = '';
+                errorMessage.textContent = 'ファイル一覧の取得に失敗しました。サーバーが起動しているか確認してください。';
+                errorMessage.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * 指定されたPDFファイルをサーバーに削除リクエストを送ります。
+         * @param {string} pdfUrl 削除対象のPDFファイルのパス (例: 'assets/file.pdf')
+         */
+        window.deletePdfFile = async function(pdfUrl) {
+            if (!confirm(`「${pdfUrl.split('/').pop()}」を本当に削除しますか？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/delete-pdf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ pdf_path: pdfUrl }), // サーバーにパスを送信
+                });
+
+                if (response.ok) {
+                    // 削除成功後、リストを更新
+                    getAndShowPdfList();
+                } else {
+                    const errorText = await response.text();
+                    alert(`削除できませんでした:`);
+                    console.log(errorText);
+                }
+            } catch (error) {
+                console.error('Delete failed:', error);
+                alert('ネットワークエラーにより削除に失敗しました。');
+            }
+        };
+
+        /**
+         * 選択されたファイルをサーバーにアップロードします。
+         * @param {File} file 
+         */
+        window.uploadFile = async function(file) {
+            if (!file) return;
+
+            const originalButtonText = "プレゼンテーションをアップロード";
+            const uploadLabel = document.getElementById('upload-label');
+            
+            // UIを更新してアップロード中であることを示す
+            uploadLabel.innerHTML = '<span class="material-symbols-outlined text-base mr-1 animate-spin">progress_activity</span> アップロード中...';
+            uploadLabel.classList.remove('bg-primary-blue', 'hover:bg-blue-700');
+            uploadLabel.classList.add('bg-gray-500');
+
+            const formData = new FormData();
+            formData.append('pdf_file', file); // サーバー側の "pdf_file" と一致
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (response.ok) {
+                    // 成功したらPDF一覧を再取得して画面を更新
+                    getAndShowPdfList(); 
+                } else {
+                    const errorText = await response.text();
+                    alert(`アップロード失敗: ${errorText}`);
+                }
+
+            } catch (error) {
+                console.error('Upload failed:', error);
+                alert(`ネットワークエラーによりアップロードに失敗しました。`);
+            } finally {
+                // UIを元に戻す
+                uploadLabel.innerHTML = `<span class="material-symbols-outlined text-base mr-1">cloud_upload</span> ${originalButtonText}`;
+                uploadLabel.classList.remove('bg-gray-500');
+                uploadLabel.classList.add('bg-primary-blue', 'hover:bg-blue-700');
+                
+                // inputをリセット
+                document.getElementById('pdf-upload-input').value = null; 
+            }
+        }
+    </script>
+</body>
+</html>

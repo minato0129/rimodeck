@@ -23,7 +23,8 @@ services:
     image: go-server:latest
     restart: always
     ports:
-      - "6060:6060" # 開発用ポート（必要に応じて8080などに変更推奨）
+      - "6060:6060" # 開発用ポート
+      - "1323:1323"
     volumes:
       - ./go-server/src:/app/src 
     tty : true
