@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Presentation Remote</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#007AFF",
+                        "background-light": "#f0f2f5",
+                        "background-dark": "#1C2541",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.75rem",
+                        "xl": "1rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark flex h-auto min-h-screen w-full flex-col">
+
+<div class="flex items-center p-4 pb-2 justify-between bg-background-light">
+    <div class="flex size-12 shrink-0 items-center">
+        <span class="material-symbols-outlined text-gray-800 text-3xl">arrow_back_ios_new</span>
+    </div>
+    <h2 class="text-gray-800 text-xl font-bold tracking-tight">プレゼンテーション リモート</h2>
+    <div class="flex w-12 items-center justify-end">
+        <button class="flex items-center justify-center rounded-lg h-12 text-gray-800 p-0">
+            <span class="material-symbols-outlined text-3xl">settings</span>
+        </button>
+    </div>
+</div>
+
+<button id="fullscreen-toggle-button" class="p-4 bg-primary text-white font-bold hover:bg-primary/80 transition-colors">プレゼンテーションモードに変更</button>
+<div class="p-4 pt-2">
+    <div id="remote-status" class="flex w-full items-center justify-center rounded-lg bg-yellow-500/20 p-2 text-sm font-medium text-yellow-700 dark:text-yellow-300">
+        <span class="mr-2 h-2.5 w-2.5 rounded-full bg-yellow-500"></span>
+        <span>Viewer IDを待機中...</span>
+    </div>
+</div>
+
+<div class="flex-grow flex justify-between items-stretch p-4 gap-4">
+    <button id="prev-button" class="flex flex-col items-center justify-center gap-4 rounded-xl bg-white text-gray-700 flex-1 shadow-lg active:shadow-none active:bg-gray-100 transition-all">
+        <span class="material-symbols-outlined text-gray-500" style="font-size: 48px;">arrow_back_ios</span>
+        <span class="text-lg font-bold">前のスライド</span>
+    </button>
+    <button id="next-button" class="flex flex-col items-center justify-center gap-4 rounded-xl bg-white text-gray-700 flex-1 shadow-lg active:shadow-none active:bg-gray-100 transition-all">
+        <span class="material-symbols-outlined text-gray-500" style="font-size: 48px;">arrow_forward_ios</span>
+        <span class="text-lg font-bold">次のスライド</span>
+    </button>
+</div>
+
+<script>
+    let ws = null;
+    let viewerId = null; 
+    // 状態管理: 現在Remoteが全画面モードをアクティブにしているか
+    let isFullscreen = false; 
+    const statusDiv = document.getElementById('remote-status');
+    const statusSpan = statusDiv.querySelector('span:last-child');
+    const statusDot = statusDiv.querySelector('span:first-child');
+    const fullscreenButton = document.getElementById('fullscreen-toggle-button');
+
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        // Viewer IDをURLパラメータから取得 (例: /remote?id=xxx)
+        const urlParams = new URLSearchParams(window.location.search);
+        viewerId = urlParams.get('id');
+
+        // ★全画面ボタンのイベントリスナー
+        fullscreenButton.addEventListener('click', () => {
+            if (ws && ws.readyState === WebSocket.OPEN && viewerId) {
+                // 送信するコマンドを決定
+                const command = isFullscreen ? 'fullscreen_end' : 'fullscreen_start';
+                
+                sendSlideCommand(command);
+                
+                // Remote側のボタンの状態をトグル（Viewer側の全画面状態を模倣）
+                isFullscreen = !isFullscreen;
+                updateFullscreenButton();
+                console.log(`Fullscreen command sent: ${command}.`);
+            } else {
+                alert('Viewerに接続されていないため、全画面コマンドを送信できません。Viewer IDが設定されているか確認してください。');
+            }
+        });
+
+        if (!viewerId) {
+            console.error("Viewer ID is missing. Please scan the QR code.");
+            statusDiv.classList.replace('bg-yellow-500/20', 'bg-red-500/20');
+            statusDot.classList.replace('bg-yellow-500', 'bg-red-500');
+            statusSpan.textContent = '接続エラー: Viewer IDがありません。QRコードをスキャンしてください。';
+            fullscreenButton.disabled = true;
+            return;
+        }
+        
+        // 接続IDを表示
+        statusSpan.textContent = `Viewer ID: ${viewerId} に接続中...`;
+        fullscreenButton.disabled = true; // 接続するまで無効化
+
+        const uri = `ws://${window.location.host}/ws`;
+        ws = new WebSocket(uri);
+
+        ws.onopen = function () {
+            console.log('Remote Connected to server.');
+            statusDiv.classList.replace('bg-yellow-500/20', 'bg-green-500/20');
+            statusDot.classList.replace('bg-yellow-500', 'bg-green-500');
+            statusSpan.textContent = `Viewer ID: ${viewerId} に接続済み`;
+            fullscreenButton.disabled = false; // 接続したら有効化
+        };
+
+        ws.onmessage = function (evt) {
+            try {
+                const message = JSON.parse(evt.data);
+                console.log('Received from Viewer/Server:', message);
+                
+                if (message.type === 'error') {
+                    alert(message.data);
+                }
+
+            } catch (e) {
+                console.log("Received raw message, ignoring:", evt.data);
+            }
+        };
+
+        ws.onclose = function () {
+            console.log('Remote Disconnected');
+            statusDiv.classList.replace('bg-green-500/20', 'bg-red-500/20');
+            statusDot.classList.replace('bg-green-500', 'bg-red-500');
+            statusSpan.textContent = 'サーバーから切断されました';
+            fullscreenButton.disabled = true;
+        };
+
+        ws.onerror = function (error) {
+            console.error('WebSocket Error:', error);
+            statusDiv.classList.replace('bg-green-500/20', 'bg-red-500/20');
+            statusDot.classList.replace('bg-green-500', 'bg-red-500');
+            statusSpan.textContent = '接続エラーが発生しました';
+            fullscreenButton.disabled = true;
+        };
+
+        /**
+         * スライド操作コマンドまたは全画面コマンドをViewerに送信します
+         * @param {string} command - 'next', 'prev', 'fullscreen_start', または 'fullscreen_end'
+         */
+        function sendSlideCommand(command) {
+            if (!ws || ws.readyState !== WebSocket.OPEN || !viewerId) {
+                console.error('WebSocket not connected or Viewer ID missing.');
+                alert('サーバーに接続されていないか、Viewer IDが設定されていません。');
+                return;
+            }
+
+            const messageObject = {
+                type: 'user_message', // main.goのMessage型に合わせる
+                id:   viewerId,       // 送信先のViewer ID
+                data: command,        // 新しいコマンド
+            };
+
+            ws.send(JSON.stringify(messageObject));
+            console.log(`Command sent to Viewer ${viewerId}: ${command}`);
+        }
+
+        // ★ボタンの表示を切り替える関数
+        function updateFullscreenButton() {
+            if (isFullscreen) {
+                fullscreenButton.textContent = 'プレゼンテーションモードを終了';
+                fullscreenButton.classList.replace('bg-primary', 'bg-red-500');
+                fullscreenButton.classList.replace('hover:bg-primary/80', 'hover:bg-red-600');
+            } else {
+                fullscreenButton.textContent = 'プレゼンテーションモードに変更';
+                fullscreenButton.classList.replace('bg-red-500', 'bg-primary');
+                fullscreenButton.classList.replace('hover:bg-red-600', 'hover:bg-primary/80');
+            }
+        }
+
+        // スライド操作ボタンにイベントリスナーを追加 (変更なし)
+        document.getElementById('prev-button').addEventListener('click', () => {
+            sendSlideCommand('prev');
+        });
+
+        document.getElementById('next-button').addEventListener('click', () => {
+            sendSlideCommand('next');
+        });
+    });
+</script>
+</body>
+</html>
