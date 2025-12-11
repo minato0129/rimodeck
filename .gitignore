@@ -2,3 +2,5 @@
 .DS_Store
 **/.vscode
 database/db-data/*
+go-server/src/assets/*
+
