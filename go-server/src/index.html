@@ -63,17 +63,27 @@
                 <span class="text-xl font-bold text-primary-blue">りもでっく</span>
             </div>
             <div class="flex items-center space-x-4">
-                
                 <label for="pdf-upload-input" class="flex items-center rounded-full bg-primary-blue px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-blue-700 transition duration-150 cursor-pointer" id="upload-label">
                     <span class="material-symbols-outlined text-base mr-1">cloud_upload</span>
                     プレゼンテーションをアップロード
                 </label>
                 <input type="file" id="pdf-upload-input" accept="application/pdf" style="display: none;" onchange="uploadFile(this.files[0])">
 
-                <div class="relative">
-                    <button class="h-8 w-8 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 transition duration-150">
+                <!-- プロフィールドロップダウン -->
+                <div class="relative profile-menu">
+                    <button id="profile-menu-button" class="h-10 w-10 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 transition duration-150 focus:outline-none border border-gray-200">
                         <span class="material-symbols-outlined">person</span>
                     </button>
+                    <div id="profile-dropdown" class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl py-2 ring-1 ring-black ring-opacity-5 hidden z-50">
+                        <div class="px-4 py-2 border-b border-gray-100 mb-1">
+                            <p class="text-xs text-gray-500">ログイン中</p>
+                            <p id="display-username" class="text-sm font-bold text-gray-800 truncate"></p>
+                        </div>
+                        <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition duration-150 flex items-center">
+                            <span class="material-symbols-outlined text-sm mr-2">logout</span>
+                            ログアウト
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -85,14 +95,14 @@
             
             <div class="flex items-center space-x-4">
                 <div class="relative">
-                    <input type="text" placeholder="検索..." class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue w-64 text-sm">
+                    <input type="text" id="pdf-search-input" placeholder="検索..." class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue w-64 text-sm">
                     <span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-lg">search</span>
                 </div>
-                <div class="flex border border-gray-300 rounded-lg overflow-hidden">
-                    <button class="p-2 bg-gray-200 text-gray-700 hover:bg-gray-300">
+                <div class="flex border border-gray-300 rounded-lg overflow-hidden bg-white">
+                    <button id="view-grid-btn" class="p-2 bg-gray-100 text-primary-blue hover:bg-gray-200 transition-colors">
                         <span class="material-symbols-outlined text-lg">grid_view</span>
                     </button>
-                    <button class="p-2 text-gray-500 hover:bg-gray-100">
+                    <button id="view-list-btn" class="p-2 text-gray-500 hover:bg-gray-100 transition-colors">
                         <span class="material-symbols-outlined text-lg">view_list</span>
                     </button>
                 </div>
@@ -112,10 +122,76 @@
     <script type="module">
         import { getDocument } from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
 
-        document.addEventListener('DOMContentLoaded', getAndShowPdfList);
+        let allPdfs = []; // 全てのPDFリストを保持する変数
+        let viewMode = 'grid'; // 表示モード ('grid' or 'list')
+
+        // ログインチェック
+        const username = localStorage.getItem('username');
+        if (!username) {
+            window.location.href = '/login';
+        } else {
+            document.getElementById('display-username').textContent = username + ' さん';
+        }
+
+        window.logout = function() {
+            localStorage.removeItem('username');
+            window.location.href = '/login';
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            getAndShowPdfList();
+            
+            // 検索入力イベント
+            document.getElementById('pdf-search-input').addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                const filtered = allPdfs.filter(pdfUrl => {
+                    const fileName = pdfUrl.split('/').pop().toLowerCase();
+                    return fileName.includes(query);
+                });
+                renderPdfList(filtered);
+            });
+
+            // 表示切り替えイベント
+            const gridBtn = document.getElementById('view-grid-btn');
+            const listBtn = document.getElementById('view-list-btn');
+
+            gridBtn.addEventListener('click', () => {
+                viewMode = 'grid';
+                gridBtn.classList.add('bg-gray-100', 'text-primary-blue');
+                listBtn.classList.remove('bg-gray-100', 'text-primary-blue');
+                renderPdfList(getCurrentFilteredPdfs());
+            });
+
+            listBtn.addEventListener('click', () => {
+                viewMode = 'list';
+                listBtn.classList.add('bg-gray-100', 'text-primary-blue');
+                gridBtn.classList.remove('bg-gray-100', 'text-primary-blue');
+                renderPdfList(getCurrentFilteredPdfs());
+            });
+        });
+
+        /**
+         * 現在の検索クエリに基づいたPDFリストを取得
+         */
+        function getCurrentFilteredPdfs() {
+            const query = document.getElementById('pdf-search-input').value.toLowerCase();
+            return allPdfs.filter(pdfUrl => {
+                const fileName = pdfUrl.split('/').pop().toLowerCase();
+                return fileName.includes(query);
+            });
+        }
         
         // 🌟 新規追加: ドキュメント全体をクリックしたときに、開いているメニューを閉じる
         document.addEventListener('click', function(e) {
+            // プロフィールドロップダウンの制御
+            const profileDropdown = document.getElementById('profile-dropdown');
+            const profileButton = document.getElementById('profile-menu-button');
+            if (profileButton.contains(e.target)) {
+                profileDropdown.classList.toggle('hidden');
+            } else if (!profileDropdown.contains(e.target)) {
+                profileDropdown.classList.add('hidden');
+            }
+
             // クリックされた要素がドロップダウンメニューやそのトリガーボタンの一部でない場合
             if (!e.target.closest('.pdf-card-menu')) {
                 document.querySelectorAll('.dropdown-menu').forEach(menu => {
@@ -139,7 +215,10 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             try {
-                const loadingTask = getDocument(pdfUrl);
+                const loadingTask = getDocument({
+                    url: pdfUrl,
+                    httpHeaders: { 'X-Username': localStorage.getItem('username') }
+                });
                 const pdf = await loadingTask.promise;
                 const page = await pdf.getPage(1); // 1ページ目を取得
 
@@ -195,106 +274,15 @@
             errorMessage.classList.add('hidden');
 
             try {
-                const response = await fetch('/pdfs');
+                const response = await fetch('/pdfs', {
+                    headers: { 'X-Username': localStorage.getItem('username') }
+                });
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
-                const pdfFiles = await response.json(); 
+                allPdfs = await response.json(); // グローバル変数に保存
                 
-                if (loadingElement) {
-                    loadingElement.style.display = 'none';
-                }
-                
-                listContainer.innerHTML = ''; 
-
-                if (pdfFiles.length === 0) {
-                     listContainer.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500">assetsフォルダにPDFファイルが見つかりません。</div>';
-                     return;
-                }
-
-                const renderPromises = [];
-
-                pdfFiles.forEach((pdfUrl, index) => {
-                    const fileName = pdfUrl.split('/').pop(); 
-                    const fileNameWithoutExt = fileName.replace(/\.pdf$/i, '');
-                    const canvasId = `pdf-canvas-${index}`;
-                    
-                    const card = document.createElement('div');
-                    // 🌟 'group'クラスを削除し、純粋なカードスタイルを適用
-                    card.className = 'bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 relative cursor-pointer'; 
-                    
-                    // カード全体をクリックしたときの動作 (ビューアへの遷移)
-                    card.onclick = (e) => {
-                        // 🌟 メニューアイコンまたはメニュー自体がクリックされた場合は遷移しない
-                        if (e.target.closest('.pdf-card-menu')) {
-                            return;
-                        }
-                        window.location.href = `/viewer?pdf=${encodeURIComponent(pdfUrl)}`;
-                    };
-
-                    card.innerHTML = `
-                        <div class="pdf-placeholder">
-                            <canvas id="${canvasId}" class="pdf-canvas-thumb"></canvas>
-                        </div>
-                        
-                        <div class="p-4">
-                            <div class="absolute top-2 right-2 pdf-card-menu">
-                                <button class="p-1 text-gray-400 hover:text-gray-600 rounded-full bg-white/70 hover:bg-white transition menu-trigger">
-                                    <span class="material-symbols-outlined text-base pointer-events-none">more_vert</span>
-                                </button>
-                                <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 hidden dropdown-menu z-10">
-                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 delete-action">
-                                        <span class="material-symbols-outlined text-sm mr-2 align-middle text-red-500">delete</span>
-                                        <span class="align-middle">ファイルを削除</span>
-                                    </a>
-                                </div>
-                            </div>
-                            
-                            <p class="text-sm font-medium text-text-dark truncate">${fileNameWithoutExt}</p>
-                            <p class="text-xs text-gray-500 mt-1">
-                                ${Math.floor(Math.random() * 4) + 1}週間前
-                            </p>
-                        </div>
-                    `;
-                    listContainer.appendChild(card);
-                    
-                    // 🌟 メニューの表示/非表示を切り替えるイベントリスナーを追加
-                    const menuTrigger = card.querySelector('.menu-trigger');
-                    const dropdownMenu = card.querySelector('.dropdown-menu');
-
-                    if (menuTrigger && dropdownMenu) {
-                        menuTrigger.addEventListener('click', (e) => {
-                            e.stopPropagation(); // 親要素のカードクリックイベントを停止
-                            
-                            // 他の開いているメニューをすべて閉じる
-                            document.querySelectorAll('.dropdown-menu').forEach(menu => {
-                                if (menu !== dropdownMenu) {
-                                    menu.classList.remove('dropdown-menu-visible');
-                                }
-                            });
-
-                            // このメニューの表示をトグル
-                            dropdownMenu.classList.toggle('dropdown-menu-visible');
-                        });
-                    }
-                    
-                    // 削除アクションをボタンにバインド
-                    const deleteButton = card.querySelector('.delete-action');
-                    if (deleteButton) {
-                        deleteButton.onclick = (e) => {
-                            e.preventDefault(); 
-                            e.stopPropagation(); // 親要素のカードクリックイベントを停止
-                            deletePdfFile(pdfUrl);
-                        };
-                    }
-
-                    // サムネイルレンダリングを非同期で開始
-                    renderPromises.push(renderPdfThumbnail(pdfUrl, canvasId));
-                });
-                
-                Promise.allSettled(renderPromises).then(() => {
-                    console.log('All PDF thumbnails processed.');
-                });
+                renderPdfList(allPdfs);
 
             } catch (error) {
                 console.error('Failed to fetch PDF list:', error);
@@ -307,6 +295,118 @@
                 errorMessage.textContent = 'PDFファイルをアップロードしてください';
                 errorMessage.classList.remove('hidden');
             }
+        }
+
+        /**
+         * PDFリストを受け取ってHTMLを描画します
+         */
+        function renderPdfList(pdfFiles) {
+            const listContainer = document.getElementById('pdf-list-container');
+            listContainer.innerHTML = '';
+
+            if (viewMode === 'grid') {
+                listContainer.className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6';
+            } else {
+                listContainer.className = 'flex flex-col gap-3 max-w-4xl mx-auto';
+            }
+
+            if (pdfFiles.length === 0) {
+                 listContainer.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500">PDFファイルが見つかりません。</div>';
+                 return;
+            }
+
+            const renderPromises = [];
+
+            pdfFiles.forEach((pdfUrl, index) => {
+                const fileName = pdfUrl.split('/').pop(); 
+                const fileNameWithoutExt = fileName.replace(/\.pdf$/i, '');
+                const canvasId = `pdf-canvas-${index}`;
+                
+                const card = document.createElement('div');
+                
+                if (viewMode === 'grid') {
+                    card.className = 'bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 relative cursor-pointer'; 
+                    card.innerHTML = `
+                        <div class="pdf-placeholder">
+                            <canvas id="${canvasId}" class="pdf-canvas-thumb"></canvas>
+                        </div>
+                        <div class="p-4">
+                            <div class="absolute top-2 right-2 pdf-card-menu">
+                                <button class="p-1 text-gray-400 hover:text-gray-600 rounded-full bg-white/70 hover:bg-white transition menu-trigger">
+                                    <span class="material-symbols-outlined text-base pointer-events-none">more_vert</span>
+                                </button>
+                                <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 hidden dropdown-menu z-10">
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 delete-action">
+                                        <span class="material-symbols-outlined text-sm mr-2 align-middle text-red-500">delete</span>
+                                        <span class="align-middle">ファイルを削除</span>
+                                    </a>
+                                </div>
+                            </div>
+                            <p class="text-sm font-medium text-text-dark truncate">${fileNameWithoutExt}</p>
+                            <p class="text-xs text-gray-500 mt-0.5">
+                                ${Math.floor(Math.random() * 4) + 1}週間前
+                            </p>
+                        </div>
+                    `;
+                } else {
+                    card.className = 'bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-300 relative cursor-pointer flex items-center p-3 gap-4';
+                    card.innerHTML = `
+                        <div class="w-12 h-16 bg-gray-100 flex-shrink-0 rounded overflow-hidden flex items-center justify-center">
+                            <canvas id="${canvasId}" class="w-full h-full object-contain"></canvas>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-text-dark truncate">${fileNameWithoutExt}</p>
+                            <p class="text-xs text-gray-500 mt-0.5">最終更新: ${Math.floor(Math.random() * 4) + 1}週間前</p>
+                        </div>
+                        <div class="pdf-card-menu">
+                            <button class="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition menu-trigger">
+                                <span class="material-symbols-outlined text-base pointer-events-none">more_vert</span>
+                            </button>
+                            <div class="absolute right-2 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 hidden dropdown-menu z-10">
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 delete-action">
+                                    <span class="material-symbols-outlined text-sm mr-2 align-middle text-red-500">delete</span>
+                                    <span class="align-middle">ファイルを削除</span>
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                card.onclick = (e) => {
+                    if (e.target.closest('.pdf-card-menu')) return;
+                    window.location.href = `/viewer?pdf=${encodeURIComponent(pdfUrl)}`;
+                };
+
+                listContainer.appendChild(card);
+
+                const menuTrigger = card.querySelector('.menu-trigger');
+                const dropdownMenu = card.querySelector('.dropdown-menu');
+
+                if (menuTrigger && dropdownMenu) {
+                    menuTrigger.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                            if (menu !== dropdownMenu) menu.classList.remove('dropdown-menu-visible');
+                        });
+                        dropdownMenu.classList.toggle('dropdown-menu-visible');
+                    });
+                }
+                
+                const deleteButton = card.querySelector('.delete-action');
+                if (deleteButton) {
+                    deleteButton.onclick = (e) => {
+                        e.preventDefault(); 
+                        e.stopPropagation();
+                        deletePdfFile(pdfUrl);
+                    };
+                }
+
+                renderPromises.push(renderPdfThumbnail(pdfUrl, canvasId));
+            });
+            
+            Promise.allSettled(renderPromises).then(() => {
+                console.log('PDF thumbnails updated.');
+            });
         }
 
         /**
@@ -323,6 +423,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-Username': localStorage.getItem('username')
                     },
                     body: JSON.stringify({ pdf_path: pdfUrl }), // サーバーにパスを送信
                 });
@@ -361,6 +462,9 @@
             try {
                 const response = await fetch('/upload', {
                     method: 'POST',
+                    headers: {
+                        'X-Username': localStorage.getItem('username')
+                    },
                     body: formData,
                 });
 
