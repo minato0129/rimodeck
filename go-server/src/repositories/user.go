@@ -1,23 +1,37 @@
 package repositories
 
 import (
+	"os"
+	"path/filepath"
 	"rimodeck/models"
 	"rimodeck/utils"
 )
 
 // ユーザー作成
-func CreateUser(username, password string) error {
+func CreateUser(username, password, slidepass string) error {
 	//uidを生成
 	uid,err := utils.Genid()
 	if err != nil {
 		return err	
 	}
 
+	// slidepass 用の UUID を生成 (フォルダ名として使用)
+	slideFolderID, err := utils.Genid()
+	if err != nil {
+		return err
+	}
+
+	// フォルダを作成
+	dirPath := filepath.Join("assets", "Slidepass", slideFolderID)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return err
+	}
+
 	Create := models.Users{
 		UserID: uid,
 		Name:   username,
 		Pass:   password,
-		Slidepass: "",
+		Slidepass: slideFolderID, // UUIDを保存
 	}
 
 	if err := db.Create(&Create).Error; err != nil {

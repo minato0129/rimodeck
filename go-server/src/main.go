@@ -3,7 +3,7 @@ package main
 
 func main() {
 	// 初期化
-	// Init()
+	Init()
 
 	// // サーバー起動
 	// mainServer()

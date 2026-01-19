@@ -10,7 +10,7 @@ import (
 )
 
 // ユーザー作成
-func CreateUser(username, password string) error {
+func CreateUser(username, password, slidepass string) error {
 	// ユーザー作成のロジックをここに実装
 	if username == "" || password == "" {
 		return errors.New("username and password cannot be empty")
@@ -33,7 +33,7 @@ func CreateUser(username, password string) error {
 	}
 
 	// ユーザーを作成
-	err = repositories.CreateUser(username, passwordHash)
+	err = repositories.CreateUser(username, passwordHash, slidepass)
 	if err != nil {
 		return err
 	}
