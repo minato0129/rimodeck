@@ -2,18 +2,18 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
+	"strings"
 
 	// NOTE: utils.Genid() は、一意のIDを生成する関数として仮定します。
-	"rimodeck/models"
 	"rimodeck/utils"
+	"rimodeck/controllers"
+	"rimodeck/repositories"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -146,8 +146,32 @@ func hello(c echo.Context) error {
 	return nil
 }
 
+// ユーザーのSlidepass（UUIDフォルダ名）を取得するヘルパー
+func getUserSlidepass(c echo.Context) (string, error) {
+	// 本来はセッションやJWTから取得すべきですが、
+	// 現状の構成に合わせてヘッダーの X-Username から取得するようにします
+	username := c.Request().Header.Get("X-Username")
+	if username == "" {
+		return "", fmt.Errorf("user not identified")
+	}
+
+	user, err := repositories.GetUserByName(username)
+	if err != nil {
+		return "", err
+	}
+	if user.Slidepass == "" {
+		return "", fmt.Errorf("slidepass not set for user")
+	}
+	return user.Slidepass, nil
+}
+
 // アップロード処理を行うハンドラ
 func handleUpload(c echo.Context) error {
+	slideFolder, err := getUserSlidepass(c)
+	if err != nil {
+		return c.String(http.StatusUnauthorized, "Unauthorized")
+	}
+
     // 1. ファイルを受け取る
     file, err := c.FormFile("pdf_file") // start.htmlで定義するフィールド名
     if err != nil {
@@ -174,8 +198,8 @@ func handleUpload(c echo.Context) error {
     defer src.Close()
 
     // 5. 保存先のパスを決定し、ファイルを保存する
-    // 保存先のフォルダがassetsであることを確認
-    dstPath := filepath.Join("assets", file.Filename)
+    // 保存先のフォルダがassets/Slidepass/{UUID}であることを確認
+    dstPath := filepath.Join("assets", "Slidepass", slideFolder, file.Filename)
     
     // 同名ファイルが存在する場合の上書き防止やリネーム処理は省略します
     
@@ -191,24 +215,30 @@ func handleUpload(c echo.Context) error {
     }
 
     // 成功レスポンス
-    log.Printf("Successfully uploaded file: %s", file.Filename)
+    log.Printf("Successfully uploaded file: %s to %s", file.Filename, slideFolder)
     return c.String(http.StatusOK, "アップロードが完了しました。")
 }
 
 
 // PDFファイルをスキャンしてリストを返す関数
 func getPdfList(c echo.Context) error {
-	dir := "assets"
+	slideFolder, err := getUserSlidepass(c)
+	if err != nil {
+		return c.String(http.StatusUnauthorized, "Unauthorized")
+	}
+
+	dir := filepath.Join("assets", "Slidepass", slideFolder)
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		log.Printf("Error reading assets directory: %v", err)
+		log.Printf("Error reading Slidepass directory: %v", err)
 		return c.String(http.StatusInternalServerError, "Failed to read PDF directory")
 	}
 
 	var pdfFiles []string
 	for _, file := range files {
 		if !file.IsDir() && filepath.Ext(file.Name()) == ".pdf" {
-			// パスをクライアント向けに /assets/filename.pdf の形式で保存
+			// パスをクライアント向けに /assets/filename.pdf の形式で返す
+			// フロントエンド側で /assets/ 以下のルーティングが動くように調整
 			pdfFiles = append(pdfFiles, "/assets/" + file.Name())
 		}
 	}
@@ -219,6 +249,11 @@ func getPdfList(c echo.Context) error {
 
 // PDFファイルを削除するハンドラ
 func deletePdfHandler(c echo.Context) error {
+	slideFolder, err := getUserSlidepass(c)
+	if err != nil {
+		return c.String(http.StatusUnauthorized, "Unauthorized")
+	}
+
     // クライアントから送信されるJSONの構造
     type DeleteRequest struct {
         PdfPath string `json:"pdf_path"` // 例: /assets/my_presentation.pdf
@@ -236,13 +271,11 @@ func deletePdfHandler(c echo.Context) error {
         return c.JSON(http.StatusBadRequest, map[string]string{"error": "PDFパスが指定されていません。"})
     }
 
-    // 2. セキュリティ対策: パスからファイル名のみを抽出し、assets内のパスを構築する
-    // これにより、クライアントが "../../../etc/passwd" のような不正なパスを送信しても、
-    // assetsディレクトリ外のファイルを削除されるのを防ぎます。
+    // 2. セキュリティ対策: パスからファイル名のみを抽出し、ユーザー専用フォルダ内のパスを構築する
     fileName := filepath.Base(pdfPath)
-    fullPath := filepath.Join("assets", fileName)
+    fullPath := filepath.Join("assets", "Slidepass", slideFolder, fileName)
     
-    // 3. ファイルの存在確認 (削除前にエラーを明確にするため)
+    // 3. ファイルの存在確認
     if _, err := os.Stat(fullPath); os.IsNotExist(err) {
         log.Printf("Deletion attempt failed: File not found at %s", fullPath)
         return c.JSON(http.StatusNotFound, map[string]string{"error": "削除対象のファイルが見つかりません。"})
@@ -258,96 +291,6 @@ func deletePdfHandler(c echo.Context) error {
     return c.JSON(http.StatusOK, map[string]string{"message": "ファイルは正常に削除されました。"})
 }
 
-
-// ノートの取得と保存を処理するハンドラ (dbを使用するように修正)
-func handleNote(c echo.Context) error {
-	
-	switch c.Request().Method {
-	case http.MethodGet:
-		// GETリクエスト: ノートの取得
-		pdfPath := c.QueryParam("pdf")
-		pageIndexStr := c.QueryParam("page")
-        
-        var note models.Note
-        
-        pageIndex, err := strconv.Atoi(pageIndexStr)
-        if err != nil {
-            return c.String(http.StatusBadRequest, "Invalid page index")
-        }
-
-        // 🌟 グローバル変数 db を使用
-        result := db.Where("pdf_path = ? AND page_index = ?", pdfPath, pageIndex).First(&note)
-
-        if result.Error != nil {
-            if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-                return c.JSON(http.StatusOK, map[string]string{"note": ""})
-            }
-            log.Printf("Error fetching note: %v", result.Error)
-            return c.String(http.StatusInternalServerError, "Failed to retrieve note")
-        }
-
-		return c.JSON(http.StatusOK, map[string]string{"note": note.Content})
-
-	case http.MethodPost:
-		// POSTリクエスト: ノートの保存または更新
-		type NoteRequest struct {
-			PdfPath string `json:"pdf_path"`
-			PageIndex int `json:"page_index"` 
-			Content string `json:"content"`
-		}
-		
-		req := new(NoteRequest)
-		if err := c.Bind(req); err != nil {
-			return c.String(http.StatusBadRequest, "Invalid request format")
-		}
-
-        var existingNote models.Note
-        
-        // 既存のノートを探す
-        // 🌟 グローバル変数 db を使用
-        result := db.Where("pdf_path = ? AND page_index = ?", req.PdfPath, req.PageIndex).First(&existingNote)
-
-        if req.Content == "" {
-            // ノート内容が空の場合、既存のレコードを削除
-            if result.Error == nil {
-                // 🌟 グローバル変数 db を使用
-                db.Delete(&existingNote)
-                log.Printf("Deleted note for %s page %d", req.PdfPath, req.PageIndex)
-            }
-            return c.JSON(http.StatusOK, map[string]string{"message": "Note deleted successfully (or not found)"})
-        }
-
-        if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-            // レコードが存在しない場合、新規作成
-            newNote := models.Note{
-                PdfPath: req.PdfPath,
-                PageIndex: req.PageIndex,
-                Content: req.Content,
-            }
-            // 🌟 グローバル変数 db を使用
-            db.Create(&newNote)
-            log.Printf("Created new note for %s page %d", req.PdfPath, req.PageIndex)
-        } else if result.Error == nil {
-            // レコードが存在する場合、内容を更新
-            existingNote.Content = req.Content
-            // 🌟 グローバル変数 db を使用
-            db.Save(&existingNote)
-            log.Printf("Updated note for %s page %d", req.PdfPath, req.PageIndex)
-        } else {
-            // その他のデータベースエラー
-            log.Printf("Error checking for existing note: %v", result.Error)
-            return c.String(http.StatusInternalServerError, "Failed to save note")
-        }
-
-		return c.JSON(http.StatusOK, map[string]string{"message": "Note saved successfully"})
-	
-	default:
-		return c.String(http.StatusMethodNotAllowed, "Method not allowed")
-	}
-}
-
-
-
 func Dbconn() {
 	// データベースを開く
 	dbconn, err := gorm.Open(postgres.Open(os.Getenv("DB_URL")), &gorm.Config{})
@@ -357,35 +300,58 @@ func Dbconn() {
 
 	// グローバル変数に格納
 	db = dbconn
-
-	db.Migrator().DropTable(&models.Note{})
-	db.AutoMigrate(&models.Note{})
 }
 
 // メインウェブサーバー設定
 func web_main() {
+	// assets/Slidepassディレクトリを作成
+	if err := os.MkdirAll(filepath.Join("assets", "Slidepass"), 0755); err != nil {
+		log.Fatalf("Failed to create Slidepass directory: %v", err)
+	}
+
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
 	// Init()
 
-	
-	// 静的ファイルを提供 (例: /public)
-	// 実際には、このディレクトリパスは実行環境に合わせて調整してください
-	e.Static("/", "../public") 
+    // 1. 個別のファイルルートを先に定義 (優先順位を上げる)
 	
 	// Viewer (index.html) をトップページとして提供	
 	e.File("/", "index.html")
 
     // 2. 従来のプレゼン画面 (index.html) を "/viewer" パスに移動する
     e.File("/viewer", "slide.html")
+
+	// ログイン画面
+	e.File("/login", "login.html")
+
+	// 新規登録画面
+	e.File("/signup", "signup.html")
 	
 	// Remote (phone.html) を /remote パスで提供
 	e.File("/remote", "phone.html")
+
+	// 2. 静的ファイルを提供 (上記のパスにマッチしなかった場合)
+	// 実際には、このディレクトリパスは実行環境に合わせて調整してください
+	e.Static("/", "../public") 
 	
-	// PDFファイルを /assets パスで提供
-	e.Static("/assets", "assets")	
+	// PDFファイルを /assets パスで提供 (PDFのみに制限)
+	
+	// PDFファイルを /assets パスで提供 (PDFのみに制限、ユーザー専用フォルダから提供)
+	e.GET("/assets/*", func(c echo.Context) error {
+		slideFolder, err := getUserSlidepass(c)
+		if err != nil {
+			return c.String(http.StatusUnauthorized, "Unauthorized")
+		}
+
+		path := c.Param("*")
+		if !strings.HasSuffix(strings.ToLower(path), ".pdf") {
+			return c.String(http.StatusForbidden, "Only PDF files are accessible")
+		}
+		// ユーザー専用フォルダ内のファイルを取得
+		return c.File(filepath.Join("assets", "Slidepass", slideFolder, path))
+	})
 	
 	//PDF一覧を取得するための新しいエンドポイント
     e.GET("/pdfs", getPdfList)
@@ -396,9 +362,12 @@ func web_main() {
 	//PDF削除のエンドポイントを追加
     e.POST("/delete-pdf", deletePdfHandler)
 
+	// 認証エンドポイント
+	e.POST("/signup", controllers.SignUp)
+	e.POST("/login", controllers.Login)
 
 	// ノート管理のエンドポイントを登録
-    // e.Match([]string{http.MethodGet, http.MethodPost}, "/note", handleNote)
+    e.Match([]string{http.MethodGet, http.MethodPost}, "/note", controllers.HandleNote)
 
 	e.GET("/ws", hello)
 	e.Logger.Fatal(e.Start("0.0.0.0:1323"))
