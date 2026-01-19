@@ -304,7 +304,7 @@
                 }
                 
                 listContainer.innerHTML = '';
-                errorMessage.textContent = 'ファイル一覧の取得に失敗しました。サーバーが起動しているか確認してください。';
+                errorMessage.textContent = 'PDFファイルをアップロードしてください';
                 errorMessage.classList.remove('hidden');
             }
         }
@@ -332,8 +332,7 @@
                     getAndShowPdfList();
                 } else {
                     const errorText = await response.text();
-                    alert(`削除できませんでした:`);
-                    console.log(errorText);
+                    alert(`削除失敗: ${errorText}`);
                 }
             } catch (error) {
                 console.error('Delete failed:', error);

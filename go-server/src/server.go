@@ -368,6 +368,8 @@ func web_main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
+	// Init()
+
 	
 	// 静的ファイルを提供 (例: /public)
 	// 実際には、このディレクトリパスは実行環境に合わせて調整してください
@@ -396,7 +398,7 @@ func web_main() {
 
 
 	// ノート管理のエンドポイントを登録
-    e.Match([]string{http.MethodGet, http.MethodPost}, "/note", handleNote)
+    // e.Match([]string{http.MethodGet, http.MethodPost}, "/note", handleNote)
 
 	e.GET("/ws", hello)
 	e.Logger.Fatal(e.Start("0.0.0.0:1323"))

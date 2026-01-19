@@ -17,7 +17,7 @@ func CreateUser(username, password string) error {
 		UserID: uid,
 		Name:   username,
 		Pass:   password,
-		Slides: []models.Slides{},
+		Slidepass: "",
 	}
 
 	if err := db.Create(&Create).Error; err != nil {
