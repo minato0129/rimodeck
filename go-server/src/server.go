@@ -336,6 +336,9 @@ func web_main() {
 	// 実際には、このディレクトリパスは実行環境に合わせて調整してください
 	e.Static("/", "../public") 
 	
+	// ロゴなどの静的アセットを公開
+	e.Static("/assets/logos", "assets/logos")
+	
 	// PDFファイルを /assets パスで提供 (PDFのみに制限)
 	
 	// PDFファイルを /assets パスで提供 (PDFのみに制限、ユーザー専用フォルダから提供)

@@ -25,7 +25,8 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: "#3498db",
+                        primary: "#1e88e5",
+                        "primary-blue": "#1e88e5",
                         secondary: "#f1f1f1",
                         accent: "#e74c3c",
                         "text-primary": "#333333",
@@ -103,12 +104,7 @@
         class="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 dark:border-gray-700 dark:bg-background-dark">
         <div class="flex items-center gap-3">
             <div class="flex items-center space-x-2">
-                <div class="flex items-center justify-center w-7 h-7 bg-primary-blue rounded-md shadow-sm">
-                    <span class="text-white font-bold text-lg leading-none">R</span>
-                </div>
-                <div class="flex flex-col leading-none">
-                    <span class="text-lg font-black text-primary-blue tracking-tighter">rimo<span class="text-gray-800 dark:text-gray-200">deck</span></span>
-                </div>
+                <img src="/assets/logos/logo-light.svg" alt="rimodeck" class="h-6">
             </div>
             <span id="display-username" class="text-xs text-gray-500 ml-1"></span>
         </div>
@@ -135,8 +131,8 @@
     <div class="flex flex-1 min-h-0">
 
         <main id="presentation-main"
-            class="relative flex min-h-0 w-full flex-col overflow-hidden rounded-lg bg-white dark:bg-background-dark shadow-xl lg:min-h-full">
-            <div id="pdf-canvas-container" class="flex flex-1 items-center justify-center p-4">
+            class="relative flex min-h-0 w-full flex-col overflow-hidden rounded-lg bg-gray-100 dark:bg-background-dark shadow-xl lg:min-h-full">
+            <div id="pdf-canvas-container" class="flex flex-1 items-center justify-center p-0">
                 <canvas id="pdf-canvas"></canvas>
                 <div id="loading-text" class="absolute text-xl font-bold">PDFを読み込み中...</div>
             </div>
@@ -316,7 +312,7 @@
                     viewScale = targetWidth / page.getViewport({ scale: 1 }).width;
                 }
 
-                const viewport = page.getViewport({ scale: viewScale * 0.95 }); // 95%のスケールでマージンを確保
+                const viewport = page.getViewport({ scale: viewScale }); // 100%のスケールで表示
 
                 pdfCanvas.height = viewport.height;
                 pdfCanvas.width = viewport.width;
