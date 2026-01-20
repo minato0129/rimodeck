@@ -61,7 +61,7 @@
 <div class="p-4 pt-2">
     <div id="remote-status" class="flex w-full items-center justify-center rounded-lg bg-yellow-500/20 p-2 text-sm font-medium text-yellow-700 dark:text-yellow-300">
         <span class="mr-2 h-2.5 w-2.5 rounded-full bg-yellow-500"></span>
-        <span>Viewer IDを待機中...</span>
+        <span>接続待機中...</span>
     </div>
 </div>
 
@@ -105,7 +105,7 @@
                 updateFullscreenButton();
                 console.log(`Fullscreen command sent: ${command}.`);
             } else {
-                alert('Viewerに接続されていないため、全画面コマンドを送信できません。Viewer IDが設定されているか確認してください。');
+                alert('接続されていないため、全画面コマンドを送信できません。QRコードを再読み込みしてください。');
             }
         });
 
@@ -113,13 +113,13 @@
             console.error("Viewer ID is missing. Please scan the QR code.");
             statusDiv.classList.replace('bg-yellow-500/20', 'bg-red-500/20');
             statusDot.classList.replace('bg-yellow-500', 'bg-red-500');
-            statusSpan.textContent = '接続エラー: Viewer IDがありません。QRコードをスキャンしてください。';
+            statusSpan.textContent = '接続エラー: QRコードを再読み込みしてください。';
             fullscreenButton.disabled = true;
             return;
         }
         
-        // 接続IDを表示
-        statusSpan.textContent = `Viewer ID: ${viewerId} に接続中...`;
+        // 接続中を表示
+        statusSpan.textContent = `接続中...`;
         fullscreenButton.disabled = true; // 接続するまで無効化
 
         const uri = `ws://${window.location.host}/ws`;
@@ -129,7 +129,7 @@
             console.log('Remote Connected to server.');
             statusDiv.classList.replace('bg-yellow-500/20', 'bg-green-500/20');
             statusDot.classList.replace('bg-yellow-500', 'bg-green-500');
-            statusSpan.textContent = `Viewer ID: ${viewerId} に接続済み`;
+            statusSpan.textContent = `接続済み`;
             fullscreenButton.disabled = false; // 接続したら有効化
         };
 
@@ -169,8 +169,8 @@
          */
         function sendSlideCommand(command) {
             if (!ws || ws.readyState !== WebSocket.OPEN || !viewerId) {
-                console.error('WebSocket not connected or Viewer ID missing.');
-                alert('サーバーに接続されていないか、Viewer IDが設定されていません。');
+                console.error('WebSocket not connected or ID missing.');
+                alert('サーバーに接続されていないか、正しく読み込まれていません。');
                 return;
             }
 
@@ -181,7 +181,7 @@
             };
 
             ws.send(JSON.stringify(messageObject));
-            console.log(`Command sent to Viewer ${viewerId}: ${command}`);
+            console.log(`Command sent: ${command}`);
         }
 
         // ★ボタンの表示を切り替える関数
