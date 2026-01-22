@@ -28,18 +28,3 @@ services:
     volumes:
       - ./go-server/src:/app/src 
 
-
-  # 3. React フロントエンドサービス
-  react-app:
-    hostname: react-app
-    build:
-      context: ./react-app
-      dockerfile: ./Dockerfile
-      target: development-dependencies-env
-    container_name: react-app
-    restart: always
-    ports:
-      - "3000:3000" # 一般的なReact開発サーバーのポートに変更
-    volumes:
-      - ./react-app:/app # ソースコードをマウント
-
