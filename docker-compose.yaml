@@ -17,11 +17,12 @@ services:
     hostname: go-server
     build:
       context: ./go-server
-      dockerfile: ./Dockerfile
+      dockerfile: ./dockerfile
       target: develop
     container_name: go-server
     image: go-server:latest
     restart: always
+    tty: true
     ports:
       - "6060:6060" # 開発用ポート
       - "1323:1323"
