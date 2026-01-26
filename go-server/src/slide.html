@@ -486,7 +486,8 @@
                 return; // WebSocket接続に進まない
             }
 
-            const uri = `ws://${window.location.host}/ws`;
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const uri = `${protocol}//${window.location.host}/ws`;
             ws = new WebSocket(uri);
             const statusDiv = document.getElementById('connection-status');
             const statusSpan = document.getElementById('status-text');
