@@ -471,6 +471,22 @@
                 saveTimeout = setTimeout(saveNote, 1000); // 1秒間入力が止まったら保存
             });
 
+            // キーボード操作のイベントリスナー
+            document.addEventListener('keydown', (event) => {
+                // ノート入力中はスライド操作を無効化
+                if (document.activeElement.id === 'slide-note') {
+                    return;
+                }
+
+                if (event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'Enter') {
+                    event.preventDefault();
+                    nextSlide();
+                } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    prevSlide();
+                }
+            });
+
             // ★修正点: 起動時にURLパラメータをチェックし、PDFをロードする
             const urlParams = new URLSearchParams(window.location.search);
             const initialPdfPath = urlParams.get('pdf');
