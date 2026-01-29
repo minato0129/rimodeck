@@ -1,0 +1,20 @@
+.pdf-placeholder {
+    /* 背景を少し暗めにして、白枠が目立たないように変更 */
+    background: #e5e7eb;
+    height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem 0.5rem 0 0;
+    overflow: hidden;
+}
+.pdf-canvas-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* 余白を出さずに埋める */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+/* JSで表示/非表示を制御するためのクラス */
+.dropdown-menu-visible {
+    display: block !important;
+}

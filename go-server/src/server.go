@@ -338,6 +338,8 @@ func web_main() {
 	
 	// ロゴなどの静的アセットを公開
 	e.Static("/assets/logos", "assets/logos")
+	e.Static("/assets/css", "assets/css")
+	e.Static("/assets/js", "assets/js")
 	
 	// PDFファイルを /assets パスで提供 (PDFのみに制限)
 	
