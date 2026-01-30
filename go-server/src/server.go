@@ -148,9 +148,18 @@ func hello(c echo.Context) error {
 
 // ユーザーのSlidepass（UUIDフォルダ名）を取得するヘルパー
 func getUserSlidepass(c echo.Context) (string, error) {
-	// 本来はセッションやJWTから取得すべきですが、
-	// 現状の構成に合わせてヘッダーの X-Username から取得するようにします
-	username := c.Request().Header.Get("X-Username")
+	// まずクッキーからユーザー名を取得
+	cookie, err := c.Cookie("username")
+	username := ""
+	if err == nil {
+		username = cookie.Value
+	}
+
+	// クッキーにない場合はヘッダーから取得 (後方互換性のため)
+	if username == "" {
+		username = c.Request().Header.Get("X-Username")
+	}
+
 	if username == "" {
 		return "", fmt.Errorf("user not identified")
 	}
@@ -370,6 +379,7 @@ func web_main() {
 	// 認証エンドポイント
 	e.POST("/signup", controllers.SignUp)
 	e.POST("/login", controllers.Login)
+	e.POST("/logout", controllers.Logout)
 
 	// ノート管理のエンドポイントを登録
     e.Match([]string{http.MethodGet, http.MethodPost}, "/note", controllers.HandleNote)

@@ -15,7 +15,12 @@ if (!username) {
     if (displayUsername) displayUsername.textContent = username + ' さん';
 }
 
-window.logout = function() {
+window.logout = async function() {
+    try {
+        await fetch('/logout', { method: 'POST' });
+    } catch (err) {
+        console.error('Logout request failed:', err);
+    }
     localStorage.removeItem('username');
     window.location.href = '/login';
 };

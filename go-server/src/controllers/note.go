@@ -15,7 +15,18 @@ type NoteRequest struct {
 }
 
 func HandleNote(c echo.Context) error {
-	username := c.Request().Header.Get("X-Username")
+	// まずクッキーからユーザー名を取得
+	username := ""
+	cookie, err := c.Cookie("username")
+	if err == nil {
+		username = cookie.Value
+	}
+
+	// クッキーにない場合はヘッダーから取得
+	if username == "" {
+		username = c.Request().Header.Get("X-Username")
+	}
+
 	if username == "" {
 		return c.JSON(http.StatusUnauthorized, "User not identified")
 	}

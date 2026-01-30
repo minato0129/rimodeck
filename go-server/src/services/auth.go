@@ -44,20 +44,20 @@ func CreateUser(username, password, slidepass string) error {
 }
 
 // ログイン
-func LoginUser(username, password string) error {
+func LoginUser(username, password string) (models.Users, error) {
 
 	user,err := repositories.GetUserByName(username)
 	if err != nil {
-		return err
+		return models.Users{}, err
 	}
 	// パスワード検証
 	err = valid_pass([]byte(password), user.Pass)
 	if err != nil {
-		return err
+		return models.Users{}, err
 	}
 
 	
-	return nil
+	return user, nil
 }
 
 // パスワード検証
