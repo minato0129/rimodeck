@@ -47,10 +47,12 @@ func Login(ctx echo.Context) error {
 	cookie := new(http.Cookie)
 	cookie.Name = "username"
 	cookie.Value = user.Name
-	cookie.Expires = time.Now().Add(24 * time.Hour) // 24時間有効
+	cookie.Expires = time.Now().Add(24 * time.Hour)
 	cookie.Path = "/"
-	cookie.HttpOnly = true // JavaScriptからアクセス不可にする（推奨）
-	// cookie.Secure = true // HTTPS環境なら有効にする
+	cookie.HttpOnly = true
+	cookie.SameSite = http.SameSiteLaxMode // 同一ドメイン内での遷移で確実に送信
+	// 本番環境がHTTPSの場合は以下を有効にするのが望ましい
+	// cookie.Secure = true 
 	ctx.SetCookie(cookie)
 
 	return ctx.JSON(http.StatusOK, map[string]string{
