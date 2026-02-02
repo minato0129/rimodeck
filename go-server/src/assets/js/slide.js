@@ -25,6 +25,30 @@ window.logout = async function() {
 // --- WebSocket Variables ---
 let ws = null;
 let viewerId = new URLSearchParams(window.location.search).get('viewer_id') || null;
+const urlParams = new URLSearchParams(window.location.search);
+const isPresenterMode = urlParams.get('presenter') === 'true';
+
+// --- Window Sync (BroadcastChannel) ---
+const syncChannel = new BroadcastChannel('rimodeck_slide_sync');
+
+syncChannel.onmessage = (event) => {
+    const { type, data } = event.data;
+    console.log('Received sync message:', type, data);
+    if (type === 'sync_page') {
+        // 他のウィンドウからページ更新通知を受けた場合
+        if (data.pageNum !== currentPageNum) {
+            renderPage(data.pageNum, false, false); // WSにもChannelにも再送しない
+        }
+    } else if (type === 'request_init') {
+        // 新しいウィンドウが初期状態を求めている場合（メイン側が応答）
+        if (!isPresenterMode && currentPageNum > 0) {
+            syncChannel.postMessage({
+                type: 'sync_page',
+                data: { pageNum: currentPageNum }
+            });
+        }
+    }
+};
 
 // --- PDF.js Variables ---
 let pdfDoc = null;
@@ -105,9 +129,10 @@ function broadcastStatus() {
 /**
  * 指定されたページ番号のPDFをレンダリングします
  * @param {number} num 
- * @param {boolean} shouldBroadcast - 状態を他のビューアーに通知するかどうか
+ * @param {boolean} shouldBroadcastWS - WebSocket経由でRemoteに通知するかどうか
+ * @param {boolean} shouldBroadcastChannel - 他のウィンドウに通知するかどうか
  */
-async function renderPage(num, shouldBroadcast = true) {
+async function renderPage(num, shouldBroadcastWS = true, shouldBroadcastChannel = true) {
     if (!pdfDoc || !ctx) return;
 
     // ページ番号のバリデーションと更新
@@ -125,9 +150,17 @@ async function renderPage(num, shouldBroadcast = true) {
     // ノートの読み込み
     loadNote(currentPageNum);
     
-    // Remoteおよび他のViewerに状態を通知
-    if (shouldBroadcast) {
+    // Remoteに状態を通知
+    if (shouldBroadcastWS) {
         broadcastStatus();
+    }
+
+    // 他のウィンドウ（発表者モードなど）に通知
+    if (shouldBroadcastChannel) {
+        syncChannel.postMessage({
+            type: 'sync_page',
+            data: { pageNum: currentPageNum }
+        });
     }
 
     // ページの取得とレンダリング
@@ -272,9 +305,6 @@ window.startPresenterMode = function() {
     // 現在のURLを取得し、発表者モード用フラグを付与
     const url = new URL(window.location.href);
     url.searchParams.set('presenter', 'true');
-    if (viewerId) {
-        url.searchParams.set('viewer_id', viewerId);
-    }
 
     // 新しいウィンドウを最大サイズで開く
     window.open(url.toString(), 'PresenterMode', `width=${screen.availWidth},height=${screen.availHeight},menubar=no,toolbar=no,location=no,status=no`);
@@ -385,6 +415,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const cancelBtn = overlay.querySelector('button[onclick*="hidden"]');
             if (cancelBtn) cancelBtn.style.display = 'none';
         }
+    }
+
+    if (isPresenterMode) {
+        console.log('Presenter mode detected. Skipping WebSocket connection and requesting state from opener.');
+        syncChannel.postMessage({ type: 'request_init' });
+        return;
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

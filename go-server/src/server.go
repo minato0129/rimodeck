@@ -78,18 +78,6 @@ func hello(c echo.Context) error {
 	mu.Lock()
 	if _, ok := wsMap[uid]; !ok {
 		wsMap[uid] = make(map[*websocket.Conn]bool)
-	} else {
-		// 既に接続がある場合（発表者モードなど）、現在のページ状態を同期するために既存のビューアーにリクエストを送る
-		for existingWs := range wsMap[uid] {
-			responseMessage := ReturnMessage{
-				Type:   "remote_control",
-				Status: 200,
-				Data:   "ping",
-			}
-			responseJSON, _ := json.Marshal(responseMessage)
-			existingWs.WriteMessage(websocket.TextMessage, responseJSON)
-			break // 1つのビューアーに聞けば十分
-		}
 	}
 	wsMap[uid][ws] = true
 	mu.Unlock()
@@ -210,25 +198,6 @@ func hello(c echo.Context) error {
 					if err != nil {
 						c.Logger().Error("Failed to broadcast to remote: ", err)
 						// delete(remotes, remoteWs) // RLock中なので削除できない。後ほど検討。
-					}
-				}
-			}
-			
-			// 他のViewerにも同期のためにブロードキャスト
-			if viewers, ok := wsMap[uid]; ok {
-				syncMessage := ReturnMessage{
-					Type:   "viewer_status",
-					Status: 200,
-					Data:   receivedMsg.Data,
-				}
-				syncJSON, _ := json.Marshal(syncMessage)
-				for viewerWs := range viewers {
-					if viewerWs == ws {
-						continue // 自分自身には送らない
-					}
-					err := viewerWs.WriteMessage(websocket.TextMessage, syncJSON)
-					if err != nil {
-						c.Logger().Error("Failed to sync to other viewer: ", err)
 					}
 				}
 			}
