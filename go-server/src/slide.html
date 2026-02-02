@@ -133,12 +133,26 @@
     </div>
 
     <div id="click-overlay"
-        class="fixed inset-0 z-[100] hidden cursor-pointer bg-black/70 text-white flex items-center justify-center"
-        onclick="handleFullscreenToggle()">
-        <div class="text-center p-8 border border-white rounded-xl">
-            <span class="material-symbols-outlined text-6xl mb-4">computer</span>
-            <p class="text-xl font-bold">プレゼンテーションを開始/終了するには、<br>この画面をクリックしてください</p>
-            <p class="text-sm mt-2">（ブラウザのセキュリティ制限のため）</p>
+        class="fixed inset-0 z-[100] hidden bg-black/80 text-white flex items-center justify-center">
+        <div class="text-center p-10 border border-white/20 bg-gray-900/50 backdrop-blur-md rounded-2xl shadow-2xl max-w-lg w-full">
+            <span class="material-symbols-outlined text-7xl mb-6 text-primary">play_circle</span>
+            <h2 class="text-2xl font-bold mb-8">プレゼンテーションを開始</h2>
+            
+            <div class="grid grid-cols-1 gap-4">
+                <button onclick="startFullscreen()" class="flex items-center justify-center gap-3 bg-primary hover:bg-primary/80 text-white py-4 px-6 rounded-xl font-bold transition-all transform hover:scale-105">
+                    <span class="material-symbols-outlined">fullscreen</span>
+                    この画面で全画面表示
+                </button>
+                
+                <button onclick="startPresenterMode()" class="flex items-center justify-center gap-3 bg-white/10 hover:bg-white/20 text-white py-4 px-6 rounded-xl font-bold border border-white/30 transition-all transform hover:scale-105">
+                    <span class="material-symbols-outlined">present_to_all</span>
+                    発表者モード（別ウィンドウ）
+                </button>
+            </div>
+            
+            <button onclick="document.getElementById('click-overlay').classList.add('hidden')" class="mt-8 text-sm text-gray-400 hover:text-white transition-colors">
+                キャンセル
+            </button>
         </div>
     </div>
 
