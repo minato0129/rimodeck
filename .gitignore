@@ -3,3 +3,5 @@
 **/.vscode
 database/db-data/*
 go-server/src/server.exe
+go-server/src/assets/Slidepass/*
+config/app.env
