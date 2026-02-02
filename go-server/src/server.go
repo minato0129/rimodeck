@@ -32,7 +32,8 @@ var (
 )
 
 // アクティブなWebSocket接続をViewer ID (文字列) にマップします
-var wsMap = make(map[string]*websocket.Conn)
+// 1つのViewer IDに対して複数の接続（メイン画面と発表者モード画面など）を許可します
+var wsMap = make(map[string]map[*websocket.Conn]bool)
 
 // 各Viewer IDに対応するRemoteの接続リストを管理します
 var remoteMap = make(map[string]map[*websocket.Conn]bool)
@@ -58,36 +59,66 @@ func hello(c echo.Context) error {
 		return err
 	}
 
-	// utils.Genid()を使用して一意のIDを生成 (Viewer ID)
-	uid, err := utils.Genid()
-	if err != nil {
-		c.Logger().Error("Failed to generate ID: ", err)
-		ws.Close()
-		return err
+	// クエリパラメータからViewer IDを取得、なければ新規生成
+	uid := c.QueryParam("id")
+	isNew := false
+	if uid == "" {
+		uid, err = utils.Genid()
+		if err != nil {
+			c.Logger().Error("Failed to generate ID: ", err)
+			ws.Close()
+			return err
+		}
+		isNew = true
 	}
 	
 	// マップに接続を格納 (Viewer IDがキー)
-	wsMap[uid] = ws
-	log.Printf("New connection established. UID: %s. Total connections: %d\n", uid, len(wsMap))
+	if _, ok := wsMap[uid]; !ok {
+		wsMap[uid] = make(map[*websocket.Conn]bool)
+	} else {
+		// 既に接続がある場合（発表者モードなど）、現在のページ状態を同期するために既存のビューアーにリクエストを送る
+		for existingWs := range wsMap[uid] {
+			responseMessage := ReturnMessage{
+				Type:   "remote_control",
+				Status: 200,
+				Data:   "ping",
+			}
+			responseJSON, _ := json.Marshal(responseMessage)
+			existingWs.WriteMessage(websocket.TextMessage, responseJSON)
+			break // 1つのビューアーに聞けば十分
+		}
+	}
+	wsMap[uid][ws] = true
+	log.Printf("New connection established for UID: %s. Total viewers for this UID: %d\n", uid, len(wsMap[uid]))
 
 
-	// 接続時に一意のID (Viewer ID) をクライアントに送信 (Viewer側がRemote URLを生成するために使用)
-	err = ws.WriteMessage(websocket.TextMessage, []byte(uid))
-	if err != nil {
-		c.Logger().Error("Failed to send UID: ", err)
+	if isNew {
+		// 接続時に一意のID (Viewer ID) をクライアントに送信 (Viewer側がRemote URLを生成するために使用)
+		err = ws.WriteMessage(websocket.TextMessage, []byte(uid))
+		if err != nil {
+			c.Logger().Error("Failed to send UID: ", err)
+		}
 	}
 
 	defer func() {
 		// defer関数で接続が終了したらマップから削除し、WebSocketを閉じる
-		delete(wsMap, uid)
-		// remoteMapからも削除
-		delete(remoteMap, uid)
+		if viewers, ok := wsMap[uid]; ok {
+			delete(viewers, ws)
+			if len(viewers) == 0 {
+				delete(wsMap, uid)
+				// 全てのViewerが切断された場合のみ、remoteMapも掃除することを検討しても良いが、
+				// Remoteが先に接続している可能性もあるので、ここではuidキーごと削除するのは慎重にする
+				// とりあえず、Viewerが0ならUID自体を消す
+				delete(remoteMap, uid)
+			}
+		}
+		
 		// 他のViewerのremoteリストに含まれている可能性もあるので掃除
 		for _, remotes := range remoteMap {
 			delete(remotes, ws)
 		}
 		ws.Close()
-		log.Printf("UID %s disconnected. Active connections: %d\n", uid, len(wsMap))
+		log.Printf("A connection for UID %s disconnected.\n", uid)
 	}()
 
 	for {
@@ -117,8 +148,8 @@ func hello(c echo.Context) error {
 			}
 			remoteMap[receivedMsg.Id][ws] = true
 
-			if sendWs, ok := wsMap[receivedMsg.Id]; ok {
-				// ターゲットのViewerにメッセージを転送 (Remote Control Commandとして)
+			if viewers, ok := wsMap[receivedMsg.Id]; ok && len(viewers) > 0 {
+				// ターゲットの全てのViewerにメッセージを転送 (Remote Control Commandとして)
 				responseMessage := ReturnMessage{
 					Type:   "remote_control", 
 					Status: 200,
@@ -131,9 +162,12 @@ func hello(c echo.Context) error {
 					continue
 				} 
 				
-				err = sendWs.WriteMessage(websocket.TextMessage, []byte(responseJSON))
-				if err != nil {
-					c.Logger().Error("Write to Viewer failed: ", err)
+				for viewerWs := range viewers {
+					err = viewerWs.WriteMessage(websocket.TextMessage, []byte(responseJSON))
+					if err != nil {
+						c.Logger().Error("Write to Viewer failed: ", err)
+						delete(viewers, viewerWs)
+					}
 				}
 			} else {
 				// ターゲットのViewerが見つからない場合、Remoteへエラーを返す
@@ -165,6 +199,26 @@ func hello(c echo.Context) error {
 					if err != nil {
 						c.Logger().Error("Failed to broadcast to remote: ", err)
 						delete(remotes, remoteWs)
+					}
+				}
+			}
+			
+			// 他のViewerにも同期のためにブロードキャスト
+			if viewers, ok := wsMap[uid]; ok {
+				syncMessage := ReturnMessage{
+					Type:   "viewer_status",
+					Status: 200,
+					Data:   receivedMsg.Data,
+				}
+				syncJSON, _ := json.Marshal(syncMessage)
+				for viewerWs := range viewers {
+					if viewerWs == ws {
+						continue // 自分自身には送らない
+					}
+					err := viewerWs.WriteMessage(websocket.TextMessage, syncJSON)
+					if err != nil {
+						c.Logger().Error("Failed to sync to other viewer: ", err)
+						delete(viewers, viewerWs)
 					}
 				}
 			}

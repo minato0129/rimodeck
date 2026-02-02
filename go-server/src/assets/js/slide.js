@@ -105,8 +105,9 @@ function broadcastStatus() {
 /**
  * 指定されたページ番号のPDFをレンダリングします
  * @param {number} num 
+ * @param {boolean} shouldBroadcast - 状態を他のビューアーに通知するかどうか
  */
-async function renderPage(num) {
+async function renderPage(num, shouldBroadcast = true) {
     if (!pdfDoc || !ctx) return;
 
     // ページ番号のバリデーションと更新
@@ -124,8 +125,10 @@ async function renderPage(num) {
     // ノートの読み込み
     loadNote(currentPageNum);
     
-    // Remoteに状態を通知
-    broadcastStatus();
+    // Remoteおよび他のViewerに状態を通知
+    if (shouldBroadcast) {
+        broadcastStatus();
+    }
 
     // ページの取得とレンダリング
     try {
@@ -269,6 +272,9 @@ window.startPresenterMode = function() {
     // 現在のURLを取得し、発表者モード用フラグを付与
     const url = new URL(window.location.href);
     url.searchParams.set('presenter', 'true');
+    if (viewerId) {
+        url.searchParams.set('viewer_id', viewerId);
+    }
 
     // 新しいウィンドウを最大サイズで開く
     window.open(url.toString(), 'PresenterMode', `width=${screen.availWidth},height=${screen.availHeight},menubar=no,toolbar=no,location=no,status=no`);
@@ -382,7 +388,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const uri = `${protocol}//${window.location.host}/ws`;
+    const existingViewerId = new URLSearchParams(window.location.search).get('viewer_id');
+    const uri = `${protocol}//${window.location.host}/ws${existingViewerId ? `?id=${existingViewerId}` : ''}`;
     ws = new WebSocket(uri);
     const statusDiv = document.getElementById('connection-status');
     const statusSpan = document.getElementById('status-text');
@@ -463,6 +470,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                     default:
                         console.log('Unknown remote command:', message.data);
+                }
+            } else if (message.type === 'viewer_status' && message.status === 200) {
+                // 他のビューアー（発表者モードなど）からの状態更新を受信
+                try {
+                    const status = JSON.parse(message.data);
+                    if (status.page_index !== undefined && status.page_index !== currentPageNum) {
+                        console.log('Syncing page from another viewer:', status.page_index);
+                        renderPage(status.page_index, false); // ループ防止のためブロードキャストしない
+                    }
+                } catch (e) {
+                    console.error('Failed to parse viewer_status data:', e);
                 }
             } else if (message.type === 'error') {
                 console.error('WebSocket Error:', message.data);
