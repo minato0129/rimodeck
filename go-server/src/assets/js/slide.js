@@ -24,7 +24,7 @@ window.logout = async function() {
 
 // --- WebSocket Variables ---
 let ws = null;
-let viewerId = null;
+let viewerId = new URLSearchParams(window.location.search).get('viewer_id') || null;
 
 // --- PDF.js Variables ---
 let pdfDoc = null;
@@ -396,8 +396,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const qrCodeContainer = document.getElementById('qr-code-container');
     const viewerIdDisplay = document.getElementById('viewer-id-display');
 
+    function generateQRCode() {
+        if (!viewerId) return;
+        
+        // QRコード生成ロジック
+        const remoteUrl = `http://${window.location.host}/remote?id=${viewerId}&user=${encodeURIComponent(username)}`;
+
+        // qrcode.jsを使用してQRコードを生成
+        if (qrCodeContainer) {
+            qrCodeContainer.innerHTML = ''; // 既存のメッセージをクリア
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(qrCodeContainer, {
+                    text: remoteUrl,
+                    width: 256,
+                    height: 256,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            } else {
+                qrCodeContainer.innerHTML = `<p class="text-xs text-red-500">QRコードライブラリのロードに失敗しました。</p>`;
+            }
+        }
+
+        if (viewerIdDisplay) viewerIdDisplay.textContent = `ID: ${viewerId}`;
+
+        // 接続待機中メッセージを更新
+        if (statusDiv && statusSpan) {
+            statusDiv.classList.remove('bg-yellow-500/20');
+            statusDiv.classList.add('bg-green-500/20');
+            const indicator = statusDiv.querySelector('.bg-yellow-500');
+            if (indicator) indicator.classList.replace('bg-yellow-500', 'bg-green-500');
+            statusSpan.textContent = '接続IDが発行されました';
+        }
+    }
+
     ws.onopen = function () {
         console.log('Viewer Connected');
+        if (viewerId) {
+            generateQRCode();
+        }
     };
 
     ws.onmessage = function (evt) {
@@ -406,37 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (viewerId === null && evt.data.startsWith('{"type":') === false) {
                 viewerId = evt.data;
                 console.log('Viewer ID:', viewerId);
-
-                // QRコード生成ロジック
-                const remoteUrl = `http://${window.location.host}/remote?id=${viewerId}&user=${encodeURIComponent(username)}`;
-
-                // qrcode.jsを使用してQRコードを生成
-                if (qrCodeContainer) {
-                    qrCodeContainer.innerHTML = ''; // 既存のメッセージをクリア
-                    if (typeof QRCode !== 'undefined') {
-                        new QRCode(qrCodeContainer, {
-                            text: remoteUrl,
-                            width: 256,
-                            height: 256,
-                            colorDark: "#000000",
-                            colorLight: "#ffffff",
-                            correctLevel: QRCode.CorrectLevel.H
-                        });
-                    } else {
-                        qrCodeContainer.innerHTML = `<p class="text-xs text-red-500">QRコードライブラリのロードに失敗しました。</p>`;
-                    }
-                }
-
-                if (viewerIdDisplay) viewerIdDisplay.textContent = `ID: ${viewerId}`;
-
-                // 接続待機中メッセージを更新
-                if (statusDiv && statusSpan) {
-                    statusDiv.classList.remove('bg-yellow-500/20');
-                    statusDiv.classList.add('bg-green-500/20');
-                    const indicator = statusDiv.querySelector('.bg-yellow-500');
-                    if (indicator) indicator.classList.replace('bg-yellow-500', 'bg-green-500');
-                    statusSpan.textContent = '接続IDが発行されました';
-                }
+                generateQRCode();
                 return;
             }
 

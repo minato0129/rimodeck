@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	// NOTE: utils.Genid() は、一意のIDを生成する関数として仮定します。
 	"rimodeck/utils"
@@ -29,6 +30,7 @@ var (
 		},
 	}
 	db *gorm.DB
+	mu sync.RWMutex
 )
 
 // アクティブなWebSocket接続をViewer ID (文字列) にマップします
@@ -73,6 +75,7 @@ func hello(c echo.Context) error {
 	}
 	
 	// マップに接続を格納 (Viewer IDがキー)
+	mu.Lock()
 	if _, ok := wsMap[uid]; !ok {
 		wsMap[uid] = make(map[*websocket.Conn]bool)
 	} else {
@@ -89,6 +92,7 @@ func hello(c echo.Context) error {
 		}
 	}
 	wsMap[uid][ws] = true
+	mu.Unlock()
 	log.Printf("New connection established for UID: %s. Total viewers for this UID: %d\n", uid, len(wsMap[uid]))
 
 
@@ -102,6 +106,7 @@ func hello(c echo.Context) error {
 
 	defer func() {
 		// defer関数で接続が終了したらマップから削除し、WebSocketを閉じる
+		mu.Lock()
 		if viewers, ok := wsMap[uid]; ok {
 			delete(viewers, ws)
 			if len(viewers) == 0 {
@@ -117,6 +122,7 @@ func hello(c echo.Context) error {
 		for _, remotes := range remoteMap {
 			delete(remotes, ws)
 		}
+		mu.Unlock()
 		ws.Close()
 		log.Printf("A connection for UID %s disconnected.\n", uid)
 	}()
@@ -143,6 +149,7 @@ func hello(c echo.Context) error {
 		// Remoteからの操作メッセージ ("user_message") を処理
 		if receivedMsg.Type == "user_message" && receivedMsg.Id != "" {
 			// この接続をこのViewer IDのRemoteとして登録
+			mu.Lock()
 			if _, ok := remoteMap[receivedMsg.Id]; !ok {
 				remoteMap[receivedMsg.Id] = make(map[*websocket.Conn]bool)
 			}
@@ -159,6 +166,7 @@ func hello(c echo.Context) error {
 				responseJSON, err := json.Marshal(responseMessage)
 				if err != nil {
 					c.Logger().Error("JSON Marshal failed for response: ", err)
+					mu.Unlock()
 					continue
 				} 
 				
@@ -169,7 +177,9 @@ func hello(c echo.Context) error {
 						delete(viewers, viewerWs)
 					}
 				}
+				mu.Unlock()
 			} else {
+				mu.Unlock()
 				// ターゲットのViewerが見つからない場合、Remoteへエラーを返す
 				responseMessage := ReturnMessage{
 					Type:   "error",
@@ -187,6 +197,7 @@ func hello(c echo.Context) error {
 			}
 		} else if receivedMsg.Type == "viewer_update" {
 			// Viewer自身の状態更新を、登録されているすべてのRemoteにブロードキャスト
+			mu.RLock()
 			if remotes, ok := remoteMap[uid]; ok {
 				responseMessage := ReturnMessage{
 					Type:   "viewer_status",
@@ -198,7 +209,7 @@ func hello(c echo.Context) error {
 					err := remoteWs.WriteMessage(websocket.TextMessage, responseJSON)
 					if err != nil {
 						c.Logger().Error("Failed to broadcast to remote: ", err)
-						delete(remotes, remoteWs)
+						// delete(remotes, remoteWs) // RLock中なので削除できない。後ほど検討。
 					}
 				}
 			}
@@ -218,10 +229,10 @@ func hello(c echo.Context) error {
 					err := viewerWs.WriteMessage(websocket.TextMessage, syncJSON)
 					if err != nil {
 						c.Logger().Error("Failed to sync to other viewer: ", err)
-						delete(viewers, viewerWs)
 					}
 				}
 			}
+			mu.RUnlock()
 		}
 	}
 	return nil
