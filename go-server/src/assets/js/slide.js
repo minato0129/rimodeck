@@ -1,5 +1,37 @@
 import { getDocument, GlobalWorkerOptions } from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
 
+// --- Functions to be exposed via window ---
+
+function startFullscreen() {
+    requestFullscreen();
+    const overlay = document.getElementById('click-overlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function startPresenterMode() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('presenter', 'true');
+    window.open(url.toString(), 'PresenterMode', `width=${screen.availWidth},height=${screen.availHeight},menubar=no,toolbar=no,location=no,status=no`);
+    const overlay = document.getElementById('click-overlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+// Expose them to the global scope through an init function
+window.initSlideFunctions = function() {
+    window.startFullscreen = startFullscreen;
+    window.startPresenterMode = startPresenterMode;
+};
+
+window.logout = async function() {
+    try {
+        await fetch('/logout', { method: 'POST' });
+    } catch (err) {
+        console.error('Logout request failed:', err);
+    }
+    localStorage.removeItem('username');
+    window.location.href = '/login';
+};
+
 // Workerパスをモジュールとして設定
 GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
 
@@ -11,16 +43,7 @@ if (!username) {
     const displayUsername = document.getElementById('display-username');
     if (displayUsername) displayUsername.textContent = username;
 }
-
-window.logout = async function() {
-    try {
-        await fetch('/logout', { method: 'POST' });
-    } catch (err) {
-        console.error('Logout request failed:', err);
-    }
-    localStorage.removeItem('username');
-    window.location.href = '/login';
-};
+window.username = username; // グローバルアクセス用
 
 // --- WebSocket Variables ---
 let ws = null;
@@ -257,24 +280,6 @@ function exitFullscreen() {
         document.msExitFullscreen();
     }
 }
-
-// 通常の全画面表示開始
-window.startFullscreen = function() {
-    requestFullscreen();
-    document.getElementById('click-overlay').classList.add('hidden');
-};
-
-// 発表者モード（別ウィンドウ）開始
-window.startPresenterMode = function() {
-    // 現在のURLを取得し、発表者モード用フラグを付与
-    const url = new URL(window.location.href);
-    url.searchParams.set('presenter', 'true');
-
-    // 新しいウィンドウを最大サイズで開く
-    window.open(url.toString(), 'PresenterMode', `width=${screen.availWidth},height=${screen.availHeight},menubar=no,toolbar=no,location=no,status=no`);
-    
-    document.getElementById('click-overlay').classList.add('hidden');
-};
 
 // 全画面切り替えボタンのクリックイベントハンドラ
 window.handleFullscreenToggle = function () {

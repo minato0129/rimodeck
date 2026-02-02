@@ -156,7 +156,18 @@
         </div>
     </div>
 
+    <script>
+        // type="module"のロード完了前にクリックされた場合のエラーを防ぐためのスタブ
+        window.startFullscreen = function() { console.log('Slide module not yet loaded'); };
+        window.startPresenterMode = function() { console.log('Slide module not yet loaded'); };
+    </script>
     <script type="module" src="/assets/js/slide.js"></script>
+    <script type="module">
+        // moduleがロードされたらグローバル関数を上書きして有効化する
+        if (window.initSlideFunctions) {
+            window.initSlideFunctions();
+        }
+    </script>
     <script nomodule>
         // ブラウザがES Modulesをサポートしていない場合へのフォールバック
     </script>
