@@ -79,8 +79,26 @@ async function saveNote() {
                 content: content
             })
         });
+        // 保存したら状態を通知（Remote側でリロードさせるため）
+        broadcastStatus();
     } catch (err) {
         console.error('Failed to save note:', err);
+    }
+}
+
+/**
+ * WebSocketを通じて現在の状態をRemoteに通知します
+ */
+function broadcastStatus() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        const status = {
+            page_index: currentPageNum,
+            pdf_path: currentPdfUrl
+        };
+        ws.send(JSON.stringify({
+            type: 'viewer_update',
+            data: JSON.stringify(status)
+        }));
     }
 }
 
@@ -105,6 +123,9 @@ async function renderPage(num) {
 
     // ノートの読み込み
     loadNote(currentPageNum);
+    
+    // Remoteに状態を通知
+    broadcastStatus();
 
     // ページの取得とレンダリング
     try {
@@ -237,6 +258,24 @@ function exitFullscreen() {
     }
 }
 
+// 通常の全画面表示開始
+window.startFullscreen = function() {
+    requestFullscreen();
+    document.getElementById('click-overlay').classList.add('hidden');
+};
+
+// 発表者モード（別ウィンドウ）開始
+window.startPresenterMode = function() {
+    // 現在のURLを取得し、発表者モード用フラグを付与
+    const url = new URL(window.location.href);
+    url.searchParams.set('presenter', 'true');
+
+    // 新しいウィンドウを最大サイズで開く
+    window.open(url.toString(), 'PresenterMode', `width=${screen.availWidth},height=${screen.availHeight},menubar=no,toolbar=no,location=no,status=no`);
+    
+    document.getElementById('click-overlay').classList.add('hidden');
+};
+
 // 全画面切り替えボタンのクリックイベントハンドラ
 window.handleFullscreenToggle = function () {
     const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
@@ -244,12 +283,9 @@ window.handleFullscreenToggle = function () {
     if (isFullscreen) {
         exitFullscreen();
     } else {
-        requestFullscreen();
+        const overlay = document.getElementById('click-overlay');
+        if (overlay) overlay.classList.remove('hidden');
     }
-
-    // オーバーレイを隠す
-    const overlay = document.getElementById('click-overlay');
-    if (overlay) overlay.classList.add('hidden');
 }
 
 // --- Event Listeners for Fullscreen State ---
@@ -323,6 +359,28 @@ document.addEventListener('DOMContentLoaded', () => {
         return; // WebSocket接続に進まない
     }
 
+    // 発表者モード（別ウィンドウ）で開かれた場合の処理
+    if (urlParams.get('presenter') === 'true') {
+        const overlay = document.getElementById('click-overlay');
+        if (overlay) {
+            overlay.classList.remove('hidden');
+            const title = overlay.querySelector('h2');
+            if (title) title.textContent = '発表者モードを全画面で開始';
+            const grid = overlay.querySelector('.grid');
+            if (grid) {
+                grid.innerHTML = `
+                    <button onclick="startFullscreen()" class="flex items-center justify-center gap-3 bg-primary hover:bg-primary/80 text-white py-6 px-6 rounded-xl font-bold transition-all transform hover:scale-105">
+                        <span class="material-symbols-outlined text-3xl">fullscreen</span>
+                        クリックして全画面を開始
+                    </button>
+                `;
+            }
+            // キャンセルボタンを隠す
+            const cancelBtn = overlay.querySelector('button[onclick*="hidden"]');
+            if (cancelBtn) cancelBtn.style.display = 'none';
+        }
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const uri = `${protocol}//${window.location.host}/ws`;
     ws = new WebSocket(uri);
@@ -343,7 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Viewer ID:', viewerId);
 
                 // QRコード生成ロジック
-                const remoteUrl = `http://${window.location.host}/remote?id=${viewerId}`;
+                const remoteUrl = `http://${window.location.host}/remote?id=${viewerId}&user=${encodeURIComponent(username)}`;
 
                 // qrcode.jsを使用してQRコードを生成
                 if (qrCodeContainer) {
@@ -393,6 +451,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                     case 'fullscreen_end':
                         exitFullscreen();
+                        break;
+                    case 'presenter_mode_start':
+                        startPresenterMode();
+                        break;
+                    case 'ping':
+                        broadcastStatus();
+                        break;
+                    case 'note_updated':
+                        loadNote(currentPageNum);
                         break;
                     default:
                         console.log('Unknown remote command:', message.data);

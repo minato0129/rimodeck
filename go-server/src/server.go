@@ -34,18 +34,21 @@ var (
 // アクティブなWebSocket接続をViewer ID (文字列) にマップします
 var wsMap = make(map[string]*websocket.Conn)
 
+// 各Viewer IDに対応するRemoteの接続リストを管理します
+var remoteMap = make(map[string]map[*websocket.Conn]bool)
+
 // クライアント(Remote)から受信するJSONメッセージの構造
 type Message struct {
-	Type string `json:"type"` // "user_message"
-	Id   string `json:"id"`   // ターゲットのViewer ID
-	Data string `json:"data"` // "next", "prev", "fullscreen"
+	Type string `json:"type"` // "user_message" または "viewer_update"
+	Id   string `json:"id"`   // ターゲットのViewer ID (RemoteからViewerへ送る場合)
+	Data string `json:"data"` // コマンド ('next', 'prev', 'fullscreen') または JSONデータ
 }
 
 // クライアント(Viewer/Remote)へ送信するJSONメッセージの構造
 type ReturnMessage struct {
-	Type   string `json:"type"`   // "remote_control" または "error"
+	Type   string `json:"type"`   // "remote_control", "viewer_status", または "error"
 	Status int    `json:"status"` // HTTPステータスコードを模倣 (200, 404など)
-	Data   string `json:"data"`   // コマンド ('next', 'prev', 'fullscreen') またはエラー詳細
+	Data   string `json:"data"`   // コマンド ('next', 'prev', 'fullscreen') または JSONデータ
 }
 
 // WebSocketハンドラ
@@ -77,6 +80,12 @@ func hello(c echo.Context) error {
 	defer func() {
 		// defer関数で接続が終了したらマップから削除し、WebSocketを閉じる
 		delete(wsMap, uid)
+		// remoteMapからも削除
+		delete(remoteMap, uid)
+		// 他のViewerのremoteリストに含まれている可能性もあるので掃除
+		for _, remotes := range remoteMap {
+			delete(remotes, ws)
+		}
 		ws.Close()
 		log.Printf("UID %s disconnected. Active connections: %d\n", uid, len(wsMap))
 	}()
@@ -102,13 +111,18 @@ func hello(c echo.Context) error {
 
 		// Remoteからの操作メッセージ ("user_message") を処理
 		if receivedMsg.Type == "user_message" && receivedMsg.Id != "" {
+			// この接続をこのViewer IDのRemoteとして登録
+			if _, ok := remoteMap[receivedMsg.Id]; !ok {
+				remoteMap[receivedMsg.Id] = make(map[*websocket.Conn]bool)
+			}
+			remoteMap[receivedMsg.Id][ws] = true
+
 			if sendWs, ok := wsMap[receivedMsg.Id]; ok {
 				// ターゲットのViewerにメッセージを転送 (Remote Control Commandとして)
 				responseMessage := ReturnMessage{
-					Type:   "remote_control", // Viewer側のJSで処理しやすいTypeに変更
+					Type:   "remote_control", 
 					Status: 200,
-					// Dataは'next', 'prev', または 'fullscreen'
-					Data: receivedMsg.Data, 
+					Data:   receivedMsg.Data, 
 				}
 
 				responseJSON, err := json.Marshal(responseMessage)
@@ -117,12 +131,9 @@ func hello(c echo.Context) error {
 					continue
 				} 
 				
-				// Viewerにコマンドを送信
 				err = sendWs.WriteMessage(websocket.TextMessage, []byte(responseJSON))
 				if err != nil {
 					c.Logger().Error("Write to Viewer failed: ", err)
-					// Viewerへの書き込み失敗は接続切れの可能性が高いため、以降のメッセージを処理しない
-					// ただし、このエラーは次回のws.ReadMessage()で検出されるため、ここでは何もしない
 				}
 			} else {
 				// ターゲットのViewerが見つからない場合、Remoteへエラーを返す
@@ -136,12 +147,28 @@ func hello(c echo.Context) error {
 					c.Logger().Error("JSON Marshal failed for error response: ", err)
 					continue
 				}
-				// Remoteにエラーを送信
 				if err := ws.WriteMessage(websocket.TextMessage, []byte(responseJSON)); err != nil {
 					c.Logger().Error("Write error response to Remote failed: ", err)
 				}
 			}
-		} 
+		} else if receivedMsg.Type == "viewer_update" {
+			// Viewer自身の状態更新を、登録されているすべてのRemoteにブロードキャスト
+			if remotes, ok := remoteMap[uid]; ok {
+				responseMessage := ReturnMessage{
+					Type:   "viewer_status",
+					Status: 200,
+					Data:   receivedMsg.Data,
+				}
+				responseJSON, _ := json.Marshal(responseMessage)
+				for remoteWs := range remotes {
+					err := remoteWs.WriteMessage(websocket.TextMessage, responseJSON)
+					if err != nil {
+						c.Logger().Error("Failed to broadcast to remote: ", err)
+						delete(remotes, remoteWs)
+					}
+				}
+			}
+		}
 	}
 	return nil
 }
