@@ -79,8 +79,26 @@ async function saveNote() {
                 content: content
             })
         });
+        // 保存したら状態を通知（Remote側でリロードさせるため）
+        broadcastStatus();
     } catch (err) {
         console.error('Failed to save note:', err);
+    }
+}
+
+/**
+ * WebSocketを通じて現在の状態をRemoteに通知します
+ */
+function broadcastStatus() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        const status = {
+            page_index: currentPageNum,
+            pdf_path: currentPdfUrl
+        };
+        ws.send(JSON.stringify({
+            type: 'viewer_update',
+            data: JSON.stringify(status)
+        }));
     }
 }
 
@@ -105,6 +123,9 @@ async function renderPage(num) {
 
     // ノートの読み込み
     loadNote(currentPageNum);
+    
+    // Remoteに状態を通知
+    broadcastStatus();
 
     // ページの取得とレンダリング
     try {
@@ -343,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Viewer ID:', viewerId);
 
                 // QRコード生成ロジック
-                const remoteUrl = `http://${window.location.host}/remote?id=${viewerId}`;
+                const remoteUrl = `http://${window.location.host}/remote?id=${viewerId}&user=${encodeURIComponent(username)}`;
 
                 // qrcode.jsを使用してQRコードを生成
                 if (qrCodeContainer) {
@@ -393,6 +414,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                     case 'fullscreen_end':
                         exitFullscreen();
+                        break;
+                    case 'ping':
+                        broadcastStatus();
+                        break;
+                    case 'note_updated':
+                        loadNote(currentPageNum);
                         break;
                     default:
                         console.log('Unknown remote command:', message.data);
