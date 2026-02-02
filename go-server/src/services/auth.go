@@ -5,7 +5,7 @@ import (
 	"log"
 	"rimodeck/repositories"
 	"rimodeck/utils"
-
+	"rimodeck/models"
 	"golang.org/x/crypto/bcrypt"
 )
 
