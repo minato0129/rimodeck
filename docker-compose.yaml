@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. PostgreSQL データベースサービス
   postgres-db:
@@ -9,6 +7,8 @@ services:
       POSTGRES_PASSWORD: rimodeck
       POSTGRES_DB: rimodeckdb
       TZ: Asia/Tokyo
+    ports:
+      - "5432:5432" # ホストから go run で接続する場合に使用
     volumes:
       - ./database/db-data:/var/lib/postgresql
 
@@ -22,6 +22,10 @@ services:
     container_name: go-server
     image: go-server:latest
     restart: always
+    env_file:
+      - ./config/app.env # app.env.example をコピーして作成
+    depends_on:
+      - postgres-db
     tty: true
     ports:
       - "6060:6060" # 開発用ポート
