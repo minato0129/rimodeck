@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import AuthForm, { type FormMessage } from '../components/AuthForm'
 import AuthLayout from '../components/AuthLayout'
 import { postCredentials } from '../lib/auth'
+import { setUsername } from '../lib/session'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -15,11 +16,7 @@ export default function Login() {
       const response = await postCredentials('/login', { username, password })
       if (response.ok) {
         // 現行版と同じく、表示用にユーザー名を保存してトップへ移動する
-        try {
-          localStorage.setItem('username', username)
-        } catch {
-          // 保存できなくてもログイン自体は成功しているので続行する
-        }
+        setUsername(username)
         navigate('/')
       } else {
         setMessage({
