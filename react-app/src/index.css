@@ -1,1 +1,9 @@
 @import "tailwindcss";
+
+/* 現行の HTML 画面で使っている tailwind.config と同じ値 */
+@theme {
+  --color-primary-blue: #1e88e5;
+  --color-bg-light: #f5f7fa;
+  --color-text-dark: #3c4043;
+  --font-sans: "Inter", sans-serif;
+}
