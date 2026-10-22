@@ -9,7 +9,8 @@ PCとスマホをQRコードで接続し、「次へ」「前へ」などの基�
 | --- | --- |
 | サーバー | Go 1.24.9 以上 / Echo / GORM / gorilla/websocket (`go-server/src`) |
 | データベース | PostgreSQL (`docker-compose.yaml` の `postgres-db`) |
-| 画面 | `go-server/src` の HTML(`index` / `login` / `signup` / `slide` / `phone`)と `assets/` の CSS・JS |
+| 画面(現行) | `go-server/src` の HTML(`index` / `login` / `signup` / `slide` / `phone`)と `assets/` の CSS・JS |
+| 画面(移行中) | `react-app/`。Vite + React + TypeScript + Tailwind。1画面ずつ移植中(後述) |
 
 DBのテーブル(`Users`, `Note`)は、サーバー起動時に `AutoMigrate` で自動作成されます。
 
@@ -47,6 +48,54 @@ go run .
 ```
 
 `app.env` の `DB_URL` はコンテナ内用(ホスト名 `postgres-db`)なので、ローカル実行では上のように `localhost` へ上書きします。
+
+## React 版フロントエンド(移行中)
+
+画面を HTML/JS から React に移しています。現時点では雛形で、各画面は「未移植」と表示されるだけです。
+移植元は `go-server/src` の同名の画面(`index` / `login` / `signup` / `slide` / `phone`)です。
+
+| React のルート | 移植元 |
+| --- | --- |
+| `/` | `index.html` / `index.js` |
+| `/login` | `login.html` / `login.js` |
+| `/signup` | `signup.html` / `signup.js` |
+| `/viewer` | `slide.html` / `slide.js` |
+| `/remote` | `phone.html` / `phone.js` |
+
+### 起動
+
+```bash
+docker compose up --build
+```
+
+<http://localhost:3000/> が React 版、<http://localhost:1323/> が現行の Go 版です。
+
+ローカルで動かす場合(Node.js 22 以上):
+
+```bash
+cd react-app
+npm install
+npm run dev
+```
+
+Go サーバーは `http://localhost:1323` にある前提です。別の場所にある場合は `VITE_API_TARGET` で指定します。
+
+### API の接続
+
+開発サーバー(`vite.config.ts`)が、Go の API と WebSocket を中継します。画面側は `/pdfs` や `/ws` のように、同じオリジンのパスで呼べます(Cookie も同じオリジンで扱えます)。
+
+- 中継するパス: `/login` `/signup` `/logout` `/upload` `/pdfs` `/delete-pdf` `/note` `/assets` `/ws`
+- `/login` と `/signup` はページ(GET)とAPI(POST)で同じ URL を使っているため、ブラウザのページ遷移だけは React が受けます。
+- ビルド成果物は `/static/` 以下に出ます。Go が PDF を `/assets/*` で配信していて、衝突を避けるためです。
+- 本番は React を別サーバーで配信する想定です。配信方法と、その場合の API の接続先(CORS・Cookie の扱いを含む)は未定です。
+
+### コマンド
+
+| コマンド | 内容 |
+| --- | --- |
+| `npm run dev` | 開発サーバー(3000番ポート) |
+| `npm run build` | 型チェックとビルド |
+| `npm run lint` | oxlint |
 
 ## 使い方
 

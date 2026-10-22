@@ -33,3 +33,21 @@ services:
     volumes:
       - ./go-server/src:/app/src 
 
+  # 3. React フロントエンド(Vite 開発サーバー)
+  react-app:
+    build:
+      context: ./react-app
+      dockerfile: ./dockerfile
+      target: develop
+    container_name: react-app
+    restart: always
+    environment:
+      # 開発サーバーが API / WebSocket を中継する先(Docker ネットワーク内の go-server)
+      VITE_API_TARGET: http://go-server:1323
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./react-app:/app
+      - /app/node_modules # ホストの node_modules でコンテナ側を上書きしない
+    depends_on:
+      - go-server
