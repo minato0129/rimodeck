@@ -37,5 +37,6 @@ func Init() {
 	
 	// マイグレーションを実行
 	db.AutoMigrate(&models.Users{})
+	db.AutoMigrate(&models.Tokens{})
 
 }
