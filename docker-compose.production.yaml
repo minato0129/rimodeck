@@ -1,0 +1,44 @@
+# 本番用の構成(LAN 内で使う前提の HTTP)。起動:
+#   docker compose -f docker-compose.production.yaml up -d --build
+# 開発用の docker-compose.yaml とは別のファイルで、同時には起動しない(80 番を nginx が使う)。
+services:
+  postgres-db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: rimodeck
+      POSTGRES_PASSWORD: rimodeck
+      POSTGRES_DB: rimodeckdb
+      TZ: Asia/Tokyo
+    restart: always
+    volumes:
+      - ./database/db-data:/var/lib/postgresql
+
+  # Go サーバー(API・WebSocket・PDF)。外には公開せず、nginx からだけ呼ぶ
+  go-server:
+    hostname: go-server
+    build:
+      context: ./go-server
+      dockerfile: ./dockerfile
+      target: develop
+    image: go-server:latest
+    # dockerfile の CMD は sleep infinity(開発用)なので、ここでサーバーを起動する
+    command: ["go", "run", "."]
+    restart: always
+    env_file:
+      - ./go-server/src/config/app.env # app.env.example をコピーして作成
+    depends_on:
+      - postgres-db
+    volumes:
+      - ./go-server/src:/app/src
+
+  # nginx: React のビルド結果を配信し、API を go-server へ中継する
+  web:
+    build:
+      context: ./react-app
+      dockerfile: ./dockerfile
+      target: production
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - go-server
