@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. PostgreSQL データベースサービス
   postgres-db:
@@ -9,6 +7,8 @@ services:
       POSTGRES_PASSWORD: rimodeck
       POSTGRES_DB: rimodeckdb
       TZ: Asia/Tokyo
+    ports:
+      - "5432:5432" # ホストから go run で接続する場合に使用
     volumes:
       - ./database/db-data:/var/lib/postgresql
 
@@ -17,28 +17,37 @@ services:
     hostname: go-server
     build:
       context: ./go-server
-      dockerfile: ./Dockerfile
+      dockerfile: ./dockerfile
       target: develop
     container_name: go-server
     image: go-server:latest
     restart: always
+    env_file:
+      - ./go-server/src/config/app.env # app.env.example をコピーして作成
+    depends_on:
+      - postgres-db
+    tty: true
     ports:
-      - "6060:6060" # 開発用ポート（必要に応じて8080などに変更推奨）
+      - "6060:6060" # 開発用ポート
+      - "1323:1323"
     volumes:
       - ./go-server/src:/app/src 
-    tty : true
 
-  # 3. React フロントエンドサービス
+  # 3. React フロントエンド(Vite 開発サーバー)
   react-app:
-    hostname: react-app
     build:
       context: ./react-app
-      dockerfile: ./Dockerfile
-      target: development-dependencies-env
+      dockerfile: ./dockerfile
+      target: develop
     container_name: react-app
     restart: always
+    environment:
+      # 開発サーバーが API / WebSocket を中継する先(Docker ネットワーク内の go-server)
+      VITE_API_TARGET: http://go-server:1323
     ports:
-      - "3000:3000" # 一般的なReact開発サーバーのポートに変更
+      - "3000:3000"
     volumes:
-      - ./react-app:/app # ソースコードをマウント
-
+      - ./react-app:/app
+      - /app/node_modules # ホストの node_modules でコンテナ側を上書きしない
+    depends_on:
+      - go-server

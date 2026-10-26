@@ -6,6 +6,7 @@ import (
 	"os"
 	"rimodeck/repositories"
 	"rimodeck/utils"
+	"rimodeck/models"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -13,7 +14,7 @@ import (
 )
 
 // ユーザー作成
-func CreateUser(username, password string) error {
+func CreateUser(username, password, slidepass string) error {
 	// ユーザー作成のロジックをここに実装
 	if username == "" || password == "" {
 		return errors.New("username and password cannot be empty")
@@ -36,7 +37,7 @@ func CreateUser(username, password string) error {
 	}
 
 	// ユーザーを作成
-	err = repositories.CreateUser(username, passwordHash)
+	err = repositories.CreateUser(username, passwordHash, slidepass)
 	if err != nil {
 		return err
 	}
@@ -47,37 +48,21 @@ func CreateUser(username, password string) error {
 }
 
 // ログイン
-func LoginUser(username, password string) (LoginResult) {
-
-	result := LoginResult{
-		Success: false,
-		Token:   "",
-		Error:   nil,
-	}
-
+// 認証に成功したユーザーを返す。ログイン状態は呼び出し側(controllers.Login)が Cookie で保持する。
+// アクセストークン(createToken)は dev 側で追加された JWT の仕組みで、まだログイン処理には組み込んでいない。
+func LoginUser(username, password string) (models.Users, error) {
 	// ユーザー取得
-	user,err := repositories.GetUserByName(username)
+	user, err := repositories.GetUserByName(username)
 	if err != nil {
-		result.Error = err
-		return result
+		return models.Users{}, err
 	}
 
 	// パスワード検証
-	err = valid_pass([]byte(password), user.Pass)
-	if err != nil {
-		return result
+	if err := valid_pass([]byte(password), user.Pass); err != nil {
+		return models.Users{}, err
 	}
 
-	// **アクセストークン発行**
-	token, err := createToken(user.UserID, user.Name)
-	if err != nil {
-		return result
-	}
-
-	result.Success = true
-	result.Token = token
-	
-	return result
+	return user, nil
 }
 
 // パスワード検証

@@ -1,6 +1,5 @@
 package main
 
-import "rimodeck/tests"
 
 func main() {
 	// 初期化
@@ -21,6 +20,7 @@ func mainServer(){
 }
 
 func Debug() {
-	tests.Test()
+	web_main()
+	// tests.Test()
 }
 

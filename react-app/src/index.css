@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+/* 現行の HTML 画面で使っている tailwind.config と同じ値 */
+@theme {
+  --color-primary-blue: #1e88e5;
+  --color-bg-light: #f5f7fa;
+  --color-text-dark: #3c4043;
+  --font-sans: "Inter", sans-serif;
+
+  /* phone(/remote)画面の色 */
+  --color-primary: #007aff;
+  --color-background-light: #f0f2f5;
+
+  /* slide(/viewer)画面の色。現行では primary / background-light という名前だが、
+     phone 画面の同名の色と値が違うため、別の名前にしている */
+  --color-viewer-bg: #f6f7f8;
+  --color-viewer-text: #333333;
+}
