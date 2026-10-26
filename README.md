@@ -51,7 +51,7 @@ go run .
 
 ## React 版フロントエンド(移行中)
 
-画面を HTML/JS から React に移しています。未移植の画面は「未移植」と表示されます。
+画面を HTML/JS から React に移しています。移植が終わっていない部分は、現行版(Go 側の画面)で確認してください。
 移植元は `go-server/src` の同名の画面(`index` / `login` / `signup` / `slide` / `phone`)です。
 
 | React のルート | 移植元 | 状況 |
@@ -59,7 +59,7 @@ go run .
 | `/` | `index.html` / `index.js` | 移植済み |
 | `/login` | `login.html` / `login.js` | 移植済み |
 | `/signup` | `signup.html` / `signup.js` | 移植済み |
-| `/viewer` | `slide.html` / `slide.js` | 未移植 |
+| `/viewer` | `slide.html` / `slide.js` | 一部移植済み(PDF表示・ページ送り・QR/WebSocket)。メモ・全画面・発表者モードは未移植 |
 | `/remote` | `phone.html` / `phone.js` | 移植済み |
 
 Go 版の HTML/JS は、5画面すべての移植が終わってから、まとめて削除します。

@@ -1,4 +1,9 @@
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import {
+  getDocument,
+  GlobalWorkerOptions,
+  type PDFDocumentProxy,
+  type RenderTask,
+} from 'pdfjs-dist/legacy/build/pdf.mjs'
 import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 import { authHeaders } from './api'
 
@@ -45,5 +50,58 @@ export async function renderThumbnail(
     console.error(`Error rendering thumbnail for ${pdfUrl}:`, error)
     ctx.fillStyle = '#e5e7eb'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
+  }
+}
+
+export type PdfDoc = PDFDocumentProxy
+
+// PDF を開く。destroy() で読み込みを中断・破棄できる。
+export function openPdf(url: string): { promise: Promise<PdfDoc>; destroy: () => void } {
+  const task = getDocument({ url, httpHeaders: authHeaders() })
+  return { promise: task.promise, destroy: () => void task.destroy() }
+}
+
+export type RenderHandle = { cancel: () => void; finished: Promise<void> }
+
+// 指定ページを、box に収まる最大の大きさ(縦横比を保つ)で canvas に描画する。
+// pdf.js は同じ canvas への描画が重なるとエラーになるので、前の描画(after)が終わってから始める。
+export function renderFitted(
+  doc: PdfDoc,
+  pageNum: number,
+  canvas: HTMLCanvasElement,
+  box: { width: number; height: number },
+  after?: Promise<void>,
+): RenderHandle {
+  let cancelled = false
+  let task: RenderTask | undefined
+
+  const finished = (async () => {
+    await after
+    if (cancelled) return
+    try {
+      const page = await doc.getPage(pageNum)
+      if (cancelled) return
+      const base = page.getViewport({ scale: 1 })
+      // 画面が横長なら高さに、縦長なら幅に合わせる
+      const scale =
+        box.width / box.height > base.width / base.height ? box.height / base.height : box.width / base.width
+      const viewport = page.getViewport({ scale })
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      canvas.width = viewport.width
+      canvas.height = viewport.height
+      task = page.render({ canvas, canvasContext: ctx, viewport })
+      await task.promise
+    } catch (error) {
+      if (!cancelled) console.error('Error rendering page:', error)
+    }
+  })()
+
+  return {
+    cancel: () => {
+      cancelled = true
+      task?.cancel()
+    },
+    finished,
   }
 }

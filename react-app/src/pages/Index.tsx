@@ -3,8 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import { Navigate, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon'
 import PdfCard, { type ViewMode } from '../components/PdfCard'
-import { ApiError, deletePdf, fetchPdfs, fileNameOf, logoutRequest, uploadPdf } from '../lib/api'
-import { clearUsername, getUsername } from '../lib/session'
+import { ApiError, deletePdf, fetchPdfs, fileNameOf, uploadPdf } from '../lib/api'
+import { getUsername } from '../lib/session'
+import { useLogout } from '../lib/useLogout'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
@@ -17,6 +18,7 @@ export default function Index() {
 
 function Dashboard({ username }: { username: string }) {
   const navigate = useNavigate()
+  const handleLogout = useLogout()
   const [pdfs, setPdfs] = useState<string[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [query, setQuery] = useState('')
@@ -89,16 +91,6 @@ function Dashboard({ username }: { username: string }) {
     const q = query.toLowerCase()
     return pdfs.filter((url) => fileNameOf(url).toLowerCase().includes(q))
   }, [pdfs, query])
-
-  async function handleLogout() {
-    try {
-      await logoutRequest()
-    } catch (error) {
-      console.error('Logout request failed:', error)
-    }
-    clearUsername()
-    navigate('/login')
-  }
 
   async function handleUpload(e: ChangeEvent<HTMLInputElement>) {
     const input = e.currentTarget
