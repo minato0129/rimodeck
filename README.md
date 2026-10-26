@@ -24,6 +24,14 @@ cp app.env.example go-server/src/config/app.env
 
 `go-server/src/config/` は `.gitignore` 対象です。コミットされません。
 
+作った `app.env` の `SECRET_KEY=` に、ログインのトークンに署名する秘密の鍵を書きます。**空や32文字未満だと、サーバーは起動しません。**
+
+```bash
+openssl rand -hex 32   # 出力された文字列を SECRET_KEY= の右に貼る
+```
+
+この値は人に見せないでください(漏れると、他人がログイン済みのふりをできてしまいます)。変えると、ログイン済みの人はログインし直しになります。
+
 ### A. Docker Compose で全部起動する
 
 ```bash
@@ -138,6 +146,7 @@ Go サーバー(<http://localhost:1323/>)が提供するのは次のものです
 | 変数 | 用途 |
 | --- | --- |
 | `DB_URL` | 必須。GORM が使う PostgreSQL の接続文字列 |
+| `SECRET_KEY` | 必須(32文字以上)。ログインのアクセストークン(JWT)の署名鍵 |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `app.env` 内で `DB_URL` を組み立てるための値 |
 | `GO_URL` | 現在のエントリポイント(`web_main`)では使われません。待ち受けは `0.0.0.0:1323` に固定されています |
 
