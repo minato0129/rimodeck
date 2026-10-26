@@ -385,32 +385,8 @@ func web_main() {
 
 	// Init()
 
-    // 1. 個別のファイルルートを先に定義 (優先順位を上げる)
-	
-	// Viewer (index.html) をトップページとして提供	
-	e.File("/", "index.html")
+	// 画面(HTML/CSS/JS)は React 版(react-app)が配信する。ここでは API・WebSocket・PDF だけを提供する。
 
-    // 2. 従来のプレゼン画面 (index.html) を "/viewer" パスに移動する
-    e.File("/viewer", "slide.html")
-
-	// ログイン画面
-	e.File("/login", "login.html")
-
-	// 新規登録画面
-	e.File("/signup", "signup.html")
-	
-	// Remote (phone.html) を /remote パスで提供
-	e.File("/remote", "phone.html")
-
-	// 2. 静的ファイルを提供 (上記のパスにマッチしなかった場合)
-	// 実際には、このディレクトリパスは実行環境に合わせて調整してください
-	e.Static("/", "../public") 
-	
-	// ロゴなどの静的アセットを公開
-	e.Static("/assets/logos", "assets/logos")
-	e.Static("/assets/css", "assets/css")
-	e.Static("/assets/js", "assets/js")
-	
 	// PDFファイルを /assets パスで提供 (PDFのみに制限)
 	
 	// PDFファイルを /assets パスで提供 (PDFのみに制限、ユーザー専用フォルダから提供)

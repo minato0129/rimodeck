@@ -9,8 +9,7 @@ PCとスマホをQRコードで接続し、「次へ」「前へ」などの基�
 | --- | --- |
 | サーバー | Go 1.24.9 以上 / Echo / GORM / gorilla/websocket (`go-server/src`) |
 | データベース | PostgreSQL (`docker-compose.yaml` の `postgres-db`) |
-| 画面(現行) | `go-server/src` の HTML(`index` / `login` / `signup` / `slide` / `phone`)と `assets/` の CSS・JS |
-| 画面(移行中) | `react-app/`。Vite + React + TypeScript + Tailwind。1画面ずつ移植中(後述) |
+| 画面 | `react-app/`。Vite + React + TypeScript + Tailwind(後述)。Go は画面を配信せず、API・WebSocket・PDF の配信だけを行う |
 
 DBのテーブル(`Users`, `Note`)は、サーバー起動時に `AutoMigrate` で自動作成されます。
 
@@ -49,20 +48,16 @@ go run .
 
 `app.env` の `DB_URL` はコンテナ内用(ホスト名 `postgres-db`)なので、ローカル実行では上のように `localhost` へ上書きします。
 
-## React 版フロントエンド(移行中)
+## フロントエンド(React)
 
-画面を HTML/JS から React に移しています。移植が終わっていない部分は、現行版(Go 側の画面)で確認してください。
-移植元は `go-server/src` の同名の画面(`index` / `login` / `signup` / `slide` / `phone`)です。
+画面は `react-app/` の React 版です。以前の Go 側の HTML/CSS/JS(`go-server/src` の `index` / `login` / `signup` / `slide` / `phone`)は、5画面すべての移植が終わったため削除しました(Git の履歴には残っています)。
 
-| React のルート | 移植元 | 状況 |
-| --- | --- | --- |
-| `/` | `index.html` / `index.js` | 移植済み |
-| `/login` | `login.html` / `login.js` | 移植済み |
-| `/signup` | `signup.html` / `signup.js` | 移植済み |
-| `/viewer` | `slide.html` / `slide.js` | 移植済み(PDF表示・ページ送り・QR/WebSocket・スライドメモ・全画面表示・発表者モード) |
-| `/remote` | `phone.html` / `phone.js` | 移植済み |
-
-Go 版の HTML/JS は、5画面すべての移植が終わってから、まとめて削除します。
+| ルート | 内容 |
+| --- | --- |
+| `/signup`, `/login` | 新規登録とログイン |
+| `/` | PDFのアップロードと一覧 |
+| `/viewer` | スライド表示画面(PC側)。メモ、全画面、発表者モード(別ウィンドウ)、QRコード |
+| `/remote` | スマホ操作画面(前へ・次へ) |
 
 ### 起動
 
@@ -70,7 +65,7 @@ Go 版の HTML/JS は、5画面すべての移植が終わってから、まと�
 docker compose up --build
 ```
 
-<http://localhost:3000/> が React 版、<http://localhost:1323/> が現行の Go 版です。
+<http://localhost:3000/> が画面(React)、<http://localhost:1323/> が API を提供する Go サーバーです。画面は 3000 番ポートで開いてください。
 
 ローカルで動かす場合(Node.js 22 以上):
 
@@ -101,14 +96,17 @@ Go サーバーは `http://localhost:1323` にある前提です。別の場所�
 
 ## 使い方
 
-起動後、ブラウザで <http://localhost:1323/> を開きます。
+起動後、ブラウザで <http://localhost:3000/> を開きます(画面のルートは上の表のとおりです)。
+スマホは、PC の `/viewer` に出る QR コードを読み取って `/remote` を開きます。
+
+Go サーバー(<http://localhost:1323/>)が提供するのは次のものです。画面は配信しません。
 
 | パス | 内容 |
 | --- | --- |
-| `/signup`, `/login` | 新規登録とログイン |
-| `/` | PDFのアップロードと一覧 |
-| `/viewer` | スライド表示画面(PC側) |
-| `/remote` | スマホ操作画面 |
+| `POST /login`, `POST /signup`, `POST /logout` | 認証 |
+| `GET /pdfs`, `POST /upload`, `POST /delete-pdf` | PDF の一覧・アップロード・削除 |
+| `GET /note`, `POST /note` | スライドメモ |
+| `GET /assets/*` | ログイン中のユーザーの PDF |
 | `/ws` | WebSocket(PCとスマホの通信) |
 
 アップロードしたPDFは `go-server/src/assets/Slidepass/` 以下にユーザーごとに保存されます。
