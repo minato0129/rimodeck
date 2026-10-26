@@ -10,4 +10,4 @@ RUN apt-get update \
 COPY src/go.mod src/go.sum ./
 RUN go mod download
 
-CMD ["go", "run", "."]
+CMD ["sleep", "infinity"]

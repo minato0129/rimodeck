@@ -23,7 +23,7 @@ services:
     image: go-server:latest
     restart: always
     env_file:
-      - ./config/app.env # app.env.example をコピーして作成
+      - ./go-server/src/config/app.env # app.env.example をコピーして作成
     depends_on:
       - postgres-db
     tty: true
