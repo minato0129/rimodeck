@@ -7,7 +7,7 @@ import NotePanel from '../components/NotePanel'
 import PresentationOverlay from '../components/PresentationOverlay'
 import QrDialog from '../components/QrDialog'
 import { fileNameOf } from '../lib/api'
-import { exitFullscreen, requestFullscreen, useFullscreenChange } from '../lib/fullscreen'
+import { requestFullscreen, useFullscreenChange } from '../lib/fullscreen'
 import { useNote } from '../lib/notes'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
@@ -131,20 +131,8 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             // Remote に、いまのページを知らせる
             api.sendStatus({ page_index: latest.current.page, pdf_path: pdfUrl })
             break
-          case 'fullscreen_start':
-            // 全画面はクリックがないと始められないので、確認のオーバーレイを出す
-            setOverlayOpen(true)
-            break
-          case 'fullscreen_end':
-            exitFullscreen()
-            setOverlayOpen(false)
-            break
           case 'note_updated':
             note.reload()
-            break
-          case 'presenter_mode_start':
-            // 別ウィンドウを開くのもクリックが必要(スマホからの指示だけではポップアップを止められる)ので、確認のオーバーレイを出す
-            setOverlayOpen(true)
             break
           default:
             console.log('Unknown remote command:', command)
@@ -304,6 +292,16 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             <Icon name="folder_open" className="text-xl" />
             <span className="ml-2 hidden text-sm font-medium sm:inline">ファイル選択に戻る</span>
           </Link>
+          {!presenter && (
+            <button
+              type="button"
+              onClick={() => setOverlayOpen(true)}
+              className="flex items-center justify-center rounded-lg bg-gray-800 px-3 py-2 text-white transition-colors hover:bg-gray-700"
+            >
+              <Icon name="slideshow" className="text-xl" />
+              <span className="ml-2 hidden text-sm font-medium sm:inline">プレゼンテーション</span>
+            </button>
+          )}
           {!presenter && (
             <button
               type="button"

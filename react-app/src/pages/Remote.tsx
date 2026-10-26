@@ -1,5 +1,5 @@
 // 移植元: go-server/src/phone.html / assets/js/phone.js
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useRemote, type ConnectionState } from '../lib/remote'
@@ -19,26 +19,14 @@ const STATUS: Record<ConnectionState, { text: string; box: string; dot: string }
 export default function Remote() {
   const [params] = useSearchParams()
   const viewerId = params.get('id')
-  const [isFullscreen, setIsFullscreen] = useState(false)
   const { state, send } = useRemote(
     viewerId,
     useCallback((text: string) => alert(text), []),
   )
   const status = STATUS[state]
-  const connected = state === 'connected'
 
   function sendSlide(command: 'next' | 'prev') {
     if (!send(command)) alert('サーバーに接続されていないか、正しく読み込まれていません。')
-  }
-
-  function toggleFullscreen() {
-    const command = isFullscreen ? 'fullscreen_end' : 'fullscreen_start'
-    if (!send(command)) {
-      alert('接続されていないため、全画面コマンドを送信できません。QRコードを再読み込みしてください。')
-      return
-    }
-    // Viewer 側の全画面の状態をまねて、ボタンの表示を切り替える
-    setIsFullscreen(!isFullscreen)
   }
 
   // この画面の角丸は、現行版の tailwind.config(lg=0.75rem, xl=1rem)に合わせて個別に指定する。
@@ -60,17 +48,6 @@ export default function Remote() {
           </button>
         </div>
       </div>
-
-      <button
-        type="button"
-        disabled={!connected}
-        onClick={toggleFullscreen}
-        className={`p-4 text-white font-bold transition-colors disabled:opacity-50 ${
-          isFullscreen ? 'bg-red-500 hover:bg-red-600' : 'bg-primary hover:bg-primary/80'
-        }`}
-      >
-        {isFullscreen ? 'プレゼンテーションモードを終了' : 'プレゼンテーションモードに変更'}
-      </button>
 
       <div className="p-4 pt-2">
         <div

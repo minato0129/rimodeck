@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { wsUrl } from './ws'
 
 // Remote(スマホ)から Viewer(PC)へ送る操作
-export type RemoteCommand = 'next' | 'prev' | 'fullscreen_start' | 'fullscreen_end'
+// (全画面・発表者モードの開始は PC 側で行う)
+export type RemoteCommand = 'next' | 'prev'
 
 // サーバーからのメッセージ(Go の ReturnMessage)
 type ServerMessage = { type: string; status?: number; data?: string }
