@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"rimodeck/models"
 	"rimodeck/services"
 	"time"
 
@@ -61,18 +62,6 @@ func Login(ctx echo.Context) error {
 		// 本番環境がHTTPSの場合は Secure: true にするのが望ましい
 	})
 
-	// クッキーを設定(従来のユーザー名。次のブランチで JWT の検証に切り替えたあと廃止する)
-	cookie := new(http.Cookie)
-	cookie.Name = "username"
-	cookie.Value = user.Name
-	cookie.Expires = time.Now().Add(24 * time.Hour)
-	cookie.Path = "/"
-	cookie.HttpOnly = true
-	cookie.SameSite = http.SameSiteLaxMode // 同一ドメイン内での遷移で確実に送信
-	// 本番環境がHTTPSの場合は以下を有効にするのが望ましい
-	// cookie.Secure = true 
-	ctx.SetCookie(cookie)
-
 	return ctx.JSON(http.StatusOK, map[string]string{
 		"message":  "Login successful",
 		"username": user.Name,
@@ -81,6 +70,7 @@ func Login(ctx echo.Context) error {
 
 // ログアウト
 func Logout(ctx echo.Context) error {
+	// 以前のログインで残っているかもしれない username の Cookie も消す
 	cookie := new(http.Cookie)
 	cookie.Name = "username"
 	cookie.Value = ""
@@ -99,4 +89,14 @@ func Logout(ctx echo.Context) error {
 	})
 
 	return ctx.JSON(http.StatusOK, "Logout successful")
+}
+
+// リクエストの Cookie(token)を検証して、ログイン中のユーザーを返す。
+// 失敗したら (空のユーザー, エラー)。呼び出し側は 401 を返す。
+func Authenticate(ctx echo.Context) (models.Users, error) {
+	cookie, err := ctx.Cookie(TokenCookieName)
+	if err != nil {
+		return models.Users{}, services.ErrInvalidToken
+	}
+	return services.AuthenticateToken(cookie.Value)
 }

@@ -129,6 +129,8 @@ QR コードには、PC でその画面を開いているアドレス(例: `http
 
 PC の LAN の IP アドレスは、macOS は `ipconfig getifaddr en0`、Linux は `hostname -I`、Windows は `ipconfig` で調べられます。つながらないときは、PC のファイアウォールで 3000 番ポートが許可されているか確認してください。
 
+ログインすると、サーバーがアクセストークン(JWT、12時間有効)を `HttpOnly` の Cookie(`token`)に入れます。以降の API(`/pdfs` `/upload` `/delete-pdf` `/note` `/assets/*`)は、この Cookie の署名・有効期限・発行済みかを確かめて本人確認します。期限が切れる(401)と、ログイン画面に戻ります。トークンの署名には `SECRET_KEY` を使います(上の「環境変数」を参照)。
+
 Go サーバー(<http://localhost:1323/>)が提供するのは次のものです。画面は配信しません。
 
 | パス | 内容 |

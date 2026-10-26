@@ -16,3 +16,10 @@ func RegisterToken(tokenString string, userID string, exp int64) error {
 
 	return result.Error
 }
+
+// 発行済み(登録済み)のトークンか
+func TokenExists(tokenString string) (bool, error) {
+	var count int64
+	result := db.Model(&models.Tokens{}).Where("token = ?", tokenString).Count(&count)
+	return count > 0, result.Error
+}

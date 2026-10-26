@@ -5,7 +5,6 @@ import {
   type RenderTask,
 } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
-import { authHeaders } from './api'
 
 // 最新版の pdf.js は比較的新しいブラウザの機能(Map.prototype.getOrInsertComputed など)を使うため、
 // 古いブラウザでもサムネイルが描画されるよう、互換処理の入った legacy ビルドを使う。
@@ -28,7 +27,7 @@ export async function renderThumbnail(
   canvas.width = width
   canvas.height = height
 
-  const loadingTask = getDocument({ url: pdfUrl, httpHeaders: authHeaders() })
+  const loadingTask = getDocument({ url: pdfUrl })
   signal.addEventListener('abort', () => void loadingTask.destroy())
 
   try {
@@ -57,7 +56,7 @@ export type PdfDoc = PDFDocumentProxy
 
 // PDF を開く。destroy() で読み込みを中断・破棄できる。
 export function openPdf(url: string): { promise: Promise<PdfDoc>; destroy: () => void } {
-  const task = getDocument({ url, httpHeaders: authHeaders() })
+  const task = getDocument({ url })
   return { promise: task.promise, destroy: () => void task.destroy() }
 }
 
