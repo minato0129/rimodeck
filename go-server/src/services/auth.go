@@ -49,7 +49,7 @@ func CreateUser(username, password, slidepass string) error {
 
 // ログイン
 // 認証に成功したユーザーを返す。ログイン状態は呼び出し側(controllers.Login)が Cookie で保持する。
-// アクセストークン(createToken)は dev 側で追加された JWT の仕組みで、まだログイン処理には組み込んでいない。
+// アクセストークンの発行は IssueToken が行う。
 func LoginUser(username, password string) (models.Users, error) {
 	// ユーザー取得
 	user, err := repositories.GetUserByName(username)
@@ -70,10 +70,28 @@ func valid_pass(password []byte, hashpass string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hashpass), password)
 }
 
-func createToken(userID string, username string) (string, error) {
-	
-	// トークンの有効期限を設定（例: 12時間）
-	expirationTime := time.Now().Add(12 * time.Hour)
+// アクセストークンの有効期間
+const TokenLifetime = 12 * time.Hour
+
+// 署名の鍵(SECRET_KEY)の最低文字数
+const minSecretKeyLength = 32
+
+// 起動時に呼び、署名の鍵が設定されていなければ止める。
+// 鍵が空のまま署名すると、誰でもトークンを偽造できてしまうため。
+func RequireSecretKey() {
+	key := os.Getenv("SECRET_KEY")
+	if len(key) < minSecretKeyLength {
+		log.Fatalf("SECRET_KEY が未設定か短すぎます(%d 文字以上)。`openssl rand -hex 32` などで作った値を go-server/src/config/app.env に書いてください(README参照)", minSecretKeyLength)
+	}
+}
+
+// ログインしたユーザーのアクセストークン(JWT)を発行する。戻り値は、トークンと有効期限。
+func IssueToken(user models.Users) (string, time.Time, error) {
+	return createToken(user.UserID, user.Name)
+}
+
+func createToken(userID string, username string) (string, time.Time, error) {
+	expirationTime := time.Now().Add(TokenLifetime)
 
 	// JWTのクレームを設定
 	claims := jwt.MapClaims{
@@ -82,21 +100,17 @@ func createToken(userID string, username string) (string, error) {
 		"exp":      expirationTime.Unix(),
 	}
 
-	// トークンを作成
+	// トークンを作成して署名する
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secretKey := []byte(os.Getenv("SECRET_KEY")) // 秘密鍵を設定（環境変数などで管理することを推奨）
-
-	// トークンに署名を付与
-	tokenString, err := token.SignedString(secretKey)
+	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 
 	// トークンをデータベースに保存
-	err = repositories.RegisterToken(tokenString, userID, expirationTime.Unix())
-	if err != nil {
-		return "", err
+	if err := repositories.RegisterToken(tokenString, userID, expirationTime.Unix()); err != nil {
+		return "", time.Time{}, err
 	}
 
-	return tokenString, nil
+	return tokenString, expirationTime, nil
 }

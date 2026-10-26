@@ -2,6 +2,7 @@ package main
 
 import (
 	"rimodeck/repositories"
+	"rimodeck/services"
 )
 
 // // .envを呼び出します。
@@ -16,6 +17,9 @@ import (
 // }
 
 func Init() {
+
+	// アクセストークンの署名に使う SECRET_KEY が設定されているか確認(なければ止める)
+	services.RequireSecretKey()
 
 	//データベース接続、マイグレーション
 	repositories.Init()

@@ -8,6 +8,9 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// アクセストークン(JWT)を入れる Cookie の名前
+const TokenCookieName = "token"
+
 type UserData struct {
 	Username  string `json:"username"`
 	Password  string `json:"password"`
@@ -43,7 +46,22 @@ func Login(ctx echo.Context) error {
 		return ctx.JSON(http.StatusUnauthorized, "Invalid username or password")
 	}
 
-	// クッキーを設定
+	// アクセストークン(JWT)を発行して Cookie に入れる
+	token, expires, err := services.IssueToken(user)
+	if err != nil {
+		return ctx.JSON(http.StatusInternalServerError, "Failed to issue token")
+	}
+	ctx.SetCookie(&http.Cookie{
+		Name:     TokenCookieName,
+		Value:    token,
+		Expires:  expires,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		// 本番環境がHTTPSの場合は Secure: true にするのが望ましい
+	})
+
+	// クッキーを設定(従来のユーザー名。次のブランチで JWT の検証に切り替えたあと廃止する)
 	cookie := new(http.Cookie)
 	cookie.Name = "username"
 	cookie.Value = user.Name
@@ -69,6 +87,16 @@ func Logout(ctx echo.Context) error {
 	cookie.Expires = time.Now().Add(-1 * time.Hour) // 過去の時間を設定して削除
 	cookie.Path = "/"
 	ctx.SetCookie(cookie)
+
+	// アクセストークンの Cookie も消す
+	ctx.SetCookie(&http.Cookie{
+		Name:     TokenCookieName,
+		Value:    "",
+		Expires:  time.Now().Add(-1 * time.Hour),
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	return ctx.JSON(http.StatusOK, "Logout successful")
 }
