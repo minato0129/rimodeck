@@ -60,7 +60,7 @@ go run .
 | `/login` | `login.html` / `login.js` | 移植済み |
 | `/signup` | `signup.html` / `signup.js` | 移植済み |
 | `/viewer` | `slide.html` / `slide.js` | 未移植 |
-| `/remote` | `phone.html` / `phone.js` | 未移植 |
+| `/remote` | `phone.html` / `phone.js` | 移植済み |
 
 Go 版の HTML/JS は、5画面すべての移植が終わってから、まとめて削除します。
 

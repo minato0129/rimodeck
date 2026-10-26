@@ -6,4 +6,8 @@
   --color-bg-light: #f5f7fa;
   --color-text-dark: #3c4043;
   --font-sans: "Inter", sans-serif;
+
+  /* phone(/remote)画面の色 */
+  --color-primary: #007aff;
+  --color-background-light: #f0f2f5;
 }
