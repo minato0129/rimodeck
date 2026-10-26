@@ -59,7 +59,7 @@ go run .
 | `/` | `index.html` / `index.js` | 移植済み |
 | `/login` | `login.html` / `login.js` | 移植済み |
 | `/signup` | `signup.html` / `signup.js` | 移植済み |
-| `/viewer` | `slide.html` / `slide.js` | 一部移植済み(PDF表示・ページ送り・QR/WebSocket・スライドメモ・全画面表示)。発表者モード(別ウィンドウ)は未移植 |
+| `/viewer` | `slide.html` / `slide.js` | 移植済み(PDF表示・ページ送り・QR/WebSocket・スライドメモ・全画面表示・発表者モード) |
 | `/remote` | `phone.html` / `phone.js` | 移植済み |
 
 Go 版の HTML/JS は、5画面すべての移植が終わってから、まとめて削除します。

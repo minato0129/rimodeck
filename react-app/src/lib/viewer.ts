@@ -21,7 +21,8 @@ type ServerMessage = { type: string; status?: number; data?: string }
 // Viewer の WebSocket 接続。
 // - existingId なし: 接続すると、サーバーが新しい ID を「生の文字列」で最初に送ってくる
 // - existingId あり: /ws?id=... で既存の ID に参加する(別ウィンドウ用)
-export function useViewerSocket(existingId: string | null, handlers: Handlers) {
+// enabled=false(発表者モードのウィンドウ)のときは接続しない
+export function useViewerSocket(existingId: string | null, handlers: Handlers, enabled = true) {
   const wsRef = useRef<WebSocket | null>(null)
   const handlersRef = useRef(handlers)
   useEffect(() => {
@@ -39,6 +40,7 @@ export function useViewerSocket(existingId: string | null, handlers: Handlers) {
   }, [])
 
   useEffect(() => {
+    if (!enabled) return
     const ws = new WebSocket(wsUrl(existingId ? `/ws?id=${encodeURIComponent(existingId)}` : '/ws'))
     wsRef.current = ws
     let id = existingId
@@ -91,7 +93,7 @@ export function useViewerSocket(existingId: string | null, handlers: Handlers) {
       ws.close()
       wsRef.current = null
     }
-  }, [existingId, sendStatus])
+  }, [existingId, sendStatus, enabled])
 
   return { viewerId, status, sendStatus }
 }

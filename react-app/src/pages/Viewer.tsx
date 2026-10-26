@@ -1,6 +1,5 @@
 // 移植元: go-server/src/slide.html / assets/js/slide.js
-// 移したもの: PDF の表示、ページ送り(キーボード・Remote)、ヘッダー、QR コードと WebSocket、スライドメモ、全画面
-// 次のブランチで移すもの: 発表者モード(別ウィンドウ)
+// 移したもの: PDF の表示、ページ送り(キーボード・Remote)、ヘッダー、QR コードと WebSocket、スライドメモ、全画面、発表者モード(別ウィンドウ)
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
@@ -13,6 +12,7 @@ import { useNote } from '../lib/notes'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
 import { useLogout } from '../lib/useLogout'
+import { openPresenterWindow, usePageSync } from '../lib/sync'
 import { useViewerSocket, type ViewerStatus } from '../lib/viewer'
 
 export default function Viewer() {
@@ -24,7 +24,15 @@ export default function Viewer() {
   if (!username) return <Navigate to="/login" replace />
   if (!pdfUrl) return <MissingPdf />
   // PDF や接続先の ID が変わったら、画面の状態を作り直す
-  return <Presentation key={pdfUrl} username={username} pdfUrl={pdfUrl} existingId={params.get('viewer_id')} />
+  return (
+    <Presentation
+      key={pdfUrl}
+      username={username}
+      pdfUrl={pdfUrl}
+      existingId={params.get('viewer_id')}
+      presenter={params.get('presenter') === 'true'}
+    />
+  )
 }
 
 // PDF が指定されていないときは、案内を出して一覧に戻す(現行版と同じ)
@@ -53,18 +61,24 @@ function isActivatable(target: EventTarget | null): boolean {
   return target instanceof Element && !!target.closest('button, a, summary')
 }
 
-function Presentation({ username, pdfUrl, existingId }: { username: string; pdfUrl: string; existingId: string | null }) {
+type PresentationProps = { username: string; pdfUrl: string; existingId: string | null; presenter: boolean }
+
+function Presentation({ username, pdfUrl, existingId, presenter }: PresentationProps) {
   const handleLogout = useLogout()
   const [doc, setDoc] = useState<PdfDoc | null>(null)
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [page, setPage] = useState(0)
   const [qrOpen, setQrOpen] = useState(false)
-  const [overlayOpen, setOverlayOpen] = useState(false)
+  // 発表者モードのウィンドウは、開いたらすぐ「全画面にする」確認を出す
+  const [overlayOpen, setOverlayOpen] = useState(presenter)
   const mainRef = useRef<HTMLElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const lastRender = useRef<RenderHandle | null>(null)
   // 他の Viewer から受け取ったページに移ったときは、同じページをもう一度知らせない(ループ防止)
   const skipBroadcastFor = useRef<number | null>(null)
+  // 別ウィンドウから届いたページに移ったときも同じ(ループ防止)。PDF の読み込み前に届いたページは、読み込み後に使う
+  const skipSyncFor = useRef<number | null>(null)
+  const pendingSync = useRef<number | null>(null)
 
   const fileName = fileNameOf(pdfUrl)
   const total = doc?.numPages ?? 0
@@ -88,42 +102,63 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
   // 知らせるのは、保存したページではなく「いま表示中のページ」(保存を待つ間にページが変わっても、古いページを知らせない)
   const note = useNote(pdfUrl, page, () => sendRef.current({ page_index: latest.current.page, pdf_path: pdfUrl }))
 
-  const { viewerId, status, sendStatus } = useViewerSocket(existingId, {
-    onRemoteCommand: (command, api) => {
-      switch (command) {
-        case 'next':
-          next()
-          break
-        case 'prev':
-          prev()
-          break
-        case 'ping':
-          // Remote に、いまのページを知らせる
-          api.sendStatus({ page_index: latest.current.page, pdf_path: pdfUrl })
-          break
-        case 'fullscreen_start':
-          // 全画面はクリックがないと始められないので、確認のオーバーレイを出す
-          setOverlayOpen(true)
-          break
-        case 'fullscreen_end':
-          exitFullscreen()
-          setOverlayOpen(false)
-          break
-        case 'note_updated':
-          note.reload()
-          break
-        default:
-          // presenter_mode_start は次のブランチで対応する
-          console.log('Unknown remote command:', command)
+  const syncPage = usePageSync(
+    presenter,
+    () => latest.current.page,
+    (n) => {
+      const { page, total } = latest.current
+      if (total === 0) {
+        pendingSync.current = n
+      } else if (n >= 1 && n <= total && n !== page) {
+        skipSyncFor.current = n
+        setPage(n)
       }
     },
-    onPeerStatus: (peer) => {
-      if (peer.page_index !== undefined && peer.page_index !== latest.current.page) {
-        skipBroadcastFor.current = peer.page_index
-        goTo(peer.page_index)
-      }
+  )
+
+  const { viewerId, status, sendStatus } = useViewerSocket(
+    existingId,
+    {
+      onRemoteCommand: (command, api) => {
+        switch (command) {
+          case 'next':
+            next()
+            break
+          case 'prev':
+            prev()
+            break
+          case 'ping':
+            // Remote に、いまのページを知らせる
+            api.sendStatus({ page_index: latest.current.page, pdf_path: pdfUrl })
+            break
+          case 'fullscreen_start':
+            // 全画面はクリックがないと始められないので、確認のオーバーレイを出す
+            setOverlayOpen(true)
+            break
+          case 'fullscreen_end':
+            exitFullscreen()
+            setOverlayOpen(false)
+            break
+          case 'note_updated':
+            note.reload()
+            break
+          case 'presenter_mode_start':
+            // 別ウィンドウを開くのもクリックが必要(スマホからの指示だけではポップアップを止められる)ので、確認のオーバーレイを出す
+            setOverlayOpen(true)
+            break
+          default:
+            console.log('Unknown remote command:', command)
+        }
+      },
+      onPeerStatus: (peer) => {
+        if (peer.page_index !== undefined && peer.page_index !== latest.current.page) {
+          skipBroadcastFor.current = peer.page_index
+          goTo(peer.page_index)
+        }
+      },
     },
-  })
+    !presenter, // 発表者モードのウィンドウは WebSocket につながない(ページはメインから受け取る)
+  )
 
   useEffect(() => {
     sendRef.current = sendStatus
@@ -141,6 +176,10 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
     setOverlayOpen(false)
   }, [])
   const closeOverlay = useCallback(() => setOverlayOpen(false), [])
+  const startPresenter = useCallback(() => {
+    openPresenterWindow()
+    setOverlayOpen(false)
+  }, [])
 
   // PDF を読み込む
   useEffect(() => {
@@ -151,7 +190,12 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
         if (cancelled) return // 破棄は cleanup の task.destroy() が行う
         setDoc(d)
         setLoadState('ready')
-        if (d.numPages > 0) setPage(1)
+        if (d.numPages > 0) {
+          // 発表者モードのウィンドウは、メインから届いたページで始める。それを、メインへ送り返さない
+          const first = Math.min(Math.max(pendingSync.current ?? 1, 1), d.numPages)
+          if (presenter) skipSyncFor.current = first
+          setPage(first)
+        }
       })
       .catch((error) => {
         if (cancelled) return
@@ -162,7 +206,7 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
       cancelled = true
       task.destroy()
     }
-  }, [pdfUrl])
+  }, [pdfUrl, presenter])
 
   // ページを描く。表示領域の大きさが変わったとき(ウィンドウのサイズ変更など)も描き直す。
   useEffect(() => {
@@ -205,6 +249,16 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
     }
     sendStatus({ page_index: page, pdf_path: pdfUrl })
   }, [page, pdfUrl, sendStatus])
+
+  // ページが変わったら、別ウィンドウ(メインと発表者モード)にも知らせる
+  useEffect(() => {
+    if (page < 1) return
+    if (skipSyncFor.current === page) {
+      skipSyncFor.current = null
+      return
+    }
+    syncPage(page)
+  }, [page, syncPage])
 
   // キーボード操作
   useEffect(() => {
@@ -250,14 +304,16 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
             <Icon name="folder_open" className="text-xl" />
             <span className="ml-2 hidden text-sm font-medium sm:inline">ファイル選択に戻る</span>
           </Link>
-          <button
-            type="button"
-            onClick={() => setQrOpen(true)}
-            className="flex items-center justify-center rounded-lg bg-primary-blue px-3 py-2 text-white transition-colors hover:bg-primary-blue/80"
-          >
-            <Icon name="qr_code_scanner" className="text-xl" />
-            <span className="ml-2 hidden text-sm font-medium sm:inline">リモートで操作</span>
-          </button>
+          {!presenter && (
+            <button
+              type="button"
+              onClick={() => setQrOpen(true)}
+              className="flex items-center justify-center rounded-lg bg-primary-blue px-3 py-2 text-white transition-colors hover:bg-primary-blue/80"
+            >
+              <Icon name="qr_code_scanner" className="text-xl" />
+              <span className="ml-2 hidden text-sm font-medium sm:inline">リモートで操作</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -279,8 +335,15 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
         <NotePanel text={note.text} loading={note.loading} failed={note.failed} onChange={note.change} />
       </div>
 
-      {overlayOpen && <PresentationOverlay onFullscreen={startFullscreen} onCancel={closeOverlay} />}
-      {qrOpen && <QrDialog viewerId={viewerId} username={username} status={status} onClose={closeQr} />}
+      {overlayOpen && (
+        <PresentationOverlay
+          onFullscreen={startFullscreen}
+          onCancel={closeOverlay}
+          onPresenter={presenter ? undefined : startPresenter}
+          presenterWindow={presenter}
+        />
+      )}
+      {qrOpen && !presenter && <QrDialog viewerId={viewerId} username={username} status={status} onClose={closeQr} />}
     </div>
   )
 }
