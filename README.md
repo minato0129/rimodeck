@@ -18,11 +18,11 @@ DBのテーブル(`Users`, `Note`)は、サーバー起動時に `AutoMigrate` �
 どちらの方法でも、最初に設定ファイルを作ります。
 
 ```bash
-mkdir -p config
-cp app.env.example config/app.env
+mkdir -p go-server/src/config
+cp app.env.example go-server/src/config/app.env
 ```
 
-`config/` は `.gitignore` 対象です。コミットされません。
+`go-server/src/config/` は `.gitignore` 対象です。コミットされません。
 
 ### A. Docker Compose で全部起動する
 
@@ -30,8 +30,8 @@ cp app.env.example config/app.env
 docker compose up --build
 ```
 
-`go-server` は `config/app.env` を読み込み、`postgres-db` の起動後に立ち上がります。
-DBの準備が間に合わず落ちた場合は `restart: always` で自動的に再起動されます。
+`go-server` コンテナは `go-server/src/config/app.env` を読み込み、`postgres-db` の起動後に立ち上がります。ただし起動するだけ(`sleep infinity`)で、Go のサーバーは動きません。VS Code などでコンテナにアタッチして、`/app/src` で `go run .` を実行してください(コード変更後は、実行中の `go run .` を `Ctrl+C` で止めてからもう一度実行します)。
+React(<http://localhost:3000/>)も同時に起動します。
 
 ### B. DBだけ Docker、サーバーはローカルで動かす
 
@@ -40,7 +40,7 @@ docker compose up -d postgres-db
 
 cd go-server/src
 set -a
-source ../../config/app.env
+source config/app.env
 set +a
 export DB_URL='postgres://rimodeck:rimodeck@localhost:5432/rimodeckdb?sslmode=disable'
 go run .
@@ -76,6 +76,22 @@ npm run dev
 ```
 
 Go サーバーは `http://localhost:1323` にある前提です。別の場所にある場合は `VITE_API_TARGET` で指定します。
+
+### 本番での配信(nginx)
+
+本番は、ビルドした React を nginx で配信します。`/login`・`/signup` の POST と `/logout` `/upload` `/pdfs` `/delete-pdf` `/note` `/assets/` `/ws` は nginx が Go サーバーに中継するので、画面と API が同じオリジンになり、Cookie や CORS の設定は要りません(振り分けは `react-app/nginx.conf`)。
+
+```bash
+mkdir -p go-server/src/config
+cp app.env.example go-server/src/config/app.env   # 初回のみ
+docker compose -f docker-compose.production.yaml up -d --build
+```
+
+<http://localhost/>(80番ポート)で開きます。スマホで QR を読み取るときは、上の「スマホで QR コードを読み取るとき」のとおり、LAN の IP(`http://192.168.x.x/`)で開いてください。
+
+- 開発用の `docker-compose.yaml` とは別のファイルで、同時には起動しません。
+- Go サーバーは外に公開せず、nginx からだけ呼びます。起動は `go run .` です(ソースをコンテナにマウントして、起動時にコンパイルします)。
+- HTTP のみです。インターネットに公開する場合は、HTTPS(証明書)の設定を別途追加してください。
 
 ### API の接続
 
