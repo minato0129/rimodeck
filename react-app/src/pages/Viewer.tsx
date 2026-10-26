@@ -1,15 +1,19 @@
 // 移植元: go-server/src/slide.html / assets/js/slide.js
-// このブランチで移したもの: PDF の表示、ページ送り(キーボード・Remote)、ヘッダー、QR コードと WebSocket
-// 次のブランチで移すもの: スライドメモ、全画面、発表者モード(別ウィンドウ)
+// 移したもの: PDF の表示、ページ送り(キーボード・Remote)、ヘッダー、QR コードと WebSocket、スライドメモ、全画面
+// 次のブランチで移すもの: 発表者モード(別ウィンドウ)
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
+import NotePanel from '../components/NotePanel'
+import PresentationOverlay from '../components/PresentationOverlay'
 import QrDialog from '../components/QrDialog'
 import { fileNameOf } from '../lib/api'
+import { exitFullscreen, requestFullscreen, useFullscreenChange } from '../lib/fullscreen'
+import { useNote } from '../lib/notes'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
 import { useLogout } from '../lib/useLogout'
-import { useViewerSocket } from '../lib/viewer'
+import { useViewerSocket, type ViewerStatus } from '../lib/viewer'
 
 export default function Viewer() {
   const [params] = useSearchParams()
@@ -55,6 +59,7 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [page, setPage] = useState(0)
   const [qrOpen, setQrOpen] = useState(false)
+  const [overlayOpen, setOverlayOpen] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const lastRender = useRef<RenderHandle | null>(null)
@@ -78,6 +83,11 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
   const next = useCallback(() => goTo(latest.current.page + 1), [goTo])
   const prev = useCallback(() => goTo(latest.current.page - 1), [goTo])
 
+  // メモを保存したら、Remote などにも知らせる(sendStatus は、この下の WebSocket のフックが返す)
+  const sendRef = useRef<(s: ViewerStatus) => void>(() => {})
+  // 知らせるのは、保存したページではなく「いま表示中のページ」(保存を待つ間にページが変わっても、古いページを知らせない)
+  const note = useNote(pdfUrl, page, () => sendRef.current({ page_index: latest.current.page, pdf_path: pdfUrl }))
+
   const { viewerId, status, sendStatus } = useViewerSocket(existingId, {
     onRemoteCommand: (command, api) => {
       switch (command) {
@@ -91,8 +101,19 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
           // Remote に、いまのページを知らせる
           api.sendStatus({ page_index: latest.current.page, pdf_path: pdfUrl })
           break
+        case 'fullscreen_start':
+          // 全画面はクリックがないと始められないので、確認のオーバーレイを出す
+          setOverlayOpen(true)
+          break
+        case 'fullscreen_end':
+          exitFullscreen()
+          setOverlayOpen(false)
+          break
+        case 'note_updated':
+          note.reload()
+          break
         default:
-          // fullscreen_* / presenter_mode_start / note_updated は次のブランチで対応する
+          // presenter_mode_start は次のブランチで対応する
           console.log('Unknown remote command:', command)
       }
     },
@@ -103,6 +124,23 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
       }
     },
   })
+
+  useEffect(() => {
+    sendRef.current = sendStatus
+  }, [sendStatus])
+
+  // 全画面が終わったら、確認のオーバーレイも閉じる(ページの描き直しは、表示領域の大きさの監視が行う)
+  useFullscreenChange(
+    useCallback((active: boolean) => {
+      if (!active) setOverlayOpen(false)
+    }, []),
+  )
+
+  const startFullscreen = useCallback(() => {
+    if (mainRef.current) requestFullscreen(mainRef.current)
+    setOverlayOpen(false)
+  }, [])
+  const closeOverlay = useCallback(() => setOverlayOpen(false), [])
 
   // PDF を読み込む
   useEffect(() => {
@@ -237,8 +275,11 @@ function Presentation({ username, pdfUrl, existingId }: { username: string; pdfU
             )}
           </div>
         </main>
+
+        <NotePanel text={note.text} loading={note.loading} failed={note.failed} onChange={note.change} />
       </div>
 
+      {overlayOpen && <PresentationOverlay onFullscreen={startFullscreen} onCancel={closeOverlay} />}
       {qrOpen && <QrDialog viewerId={viewerId} username={username} status={status} onClose={closeQr} />}
     </div>
   )
