@@ -3,3 +3,5 @@ config/*
 **/.vscode
 database/db-data/*
 go-server/src/server.exe
+# HTTPS の証明書と秘密鍵(絶対にコミットしない)
+certs/

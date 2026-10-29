@@ -1,6 +1,7 @@
 # 本番用の構成(LAN 内で使う前提の HTTP)。起動:
+#   ./scripts/make-self-signed-cert.sh <PCのIPアドレス>   # 証明書(初回のみ。README の「HTTPS」参照)
 #   docker compose -f docker-compose.production.yaml up -d --build
-# 開発用の docker-compose.yaml とは別のファイルで、同時には起動しない(80 番を nginx が使う)。
+# 開発用の docker-compose.yaml とは別のファイルで、同時には起動しない(80 / 443 番を nginx が使う)。
 services:
   postgres-db:
     image: postgres:latest
@@ -31,7 +32,7 @@ services:
     volumes:
       - ./go-server/src:/app/src
 
-  # nginx: React のビルド結果を配信し、API を go-server へ中継する
+  # nginx: React のビルド結果を HTTPS で配信し、API を go-server へ中継する
   web:
     build:
       context: ./react-app
@@ -39,6 +40,9 @@ services:
       target: production
     restart: always
     ports:
-      - "80:80"
+      - "80:80"   # 443 へ転送するだけ
+      - "443:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro # fullchain.pem と privkey.pem(Git には入れない)
     depends_on:
       - go-server

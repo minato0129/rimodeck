@@ -85,21 +85,54 @@ npm run dev
 
 Go サーバーは `http://localhost:1323` にある前提です。別の場所にある場合は `VITE_API_TARGET` で指定します。
 
-### 本番での配信(nginx)
+### 本番での配信(nginx + HTTPS)
 
-本番は、ビルドした React を nginx で配信します。`/login`・`/signup` の POST と `/logout` `/upload` `/pdfs` `/delete-pdf` `/note` `/assets/` `/ws` は nginx が Go サーバーに中継するので、画面と API が同じオリジンになり、Cookie や CORS の設定は要りません(振り分けは `react-app/nginx.conf`)。
+本番は、ビルドした React を nginx で、HTTPS で配信します。`/login`・`/signup` の POST と `/logout` `/upload` `/pdfs` `/delete-pdf` `/note` `/assets/` `/ws` は nginx が Go サーバーに中継するので、画面と API が同じオリジンになり、Cookie や CORS の設定は要りません(振り分けは `react-app/nginx.conf`)。80 番(HTTP)は 443 番(HTTPS)へ転送します。
 
 ```bash
 mkdir -p go-server/src/config
-cp app.env.example go-server/src/config/app.env   # 初回のみ
+cp app.env.example go-server/src/config/app.env   # 初回のみ(SECRET_KEY も設定する)
+# HTTPS の証明書を certs/ に用意する(下の「HTTPS の証明書」)
 docker compose -f docker-compose.production.yaml up -d --build
 ```
 
-<http://localhost/>(80番ポート)で開きます。スマホで QR を読み取るときは、上の「スマホで QR コードを読み取るとき」のとおり、LAN の IP(`http://192.168.x.x/`)で開いてください。
+<https://localhost/> で開きます。スマホで QR を読み取るときは、上の「スマホで QR コードを読み取るとき」のとおり、LAN の IP(`https://192.168.x.x/`)で開いてください。
 
 - 開発用の `docker-compose.yaml` とは別のファイルで、同時には起動しません。
 - Go サーバーは外に公開せず、nginx からだけ呼びます。起動は `go run .` です(ソースをコンテナにマウントして、起動時にコンパイルします)。
-- HTTP のみです。インターネットに公開する場合は、HTTPS(証明書)の設定を別途追加してください。
+- ログインの Cookie には、HTTPS のとき `Secure` が付きます(HTTP のときは付けません。付けるとブラウザが Cookie を送り返さず、ログインできなくなるため)。
+
+#### HTTPS の証明書
+
+nginx は `certs/fullchain.pem`(証明書)と `certs/privkey.pem`(秘密鍵)を読みます。`certs/` は Git に入りません。**秘密鍵は人に見せないでください。** 次のどれかで用意します。
+
+**A. LAN 内で試す(自己署名証明書)**
+
+```bash
+./scripts/make-self-signed-cert.sh 192.168.1.10   # ブラウザがアクセスする IP アドレスかホスト名(複数可)
+```
+
+`localhost` と `127.0.0.1` は自動で含まれます。自己署名なので、ブラウザ(PC もスマホも)に「安全ではない」と警告が出ます。「詳細設定」から続行すれば使えます。警告を出したくないときは、`certs/fullchain.pem` を端末に「信頼する証明書」として登録します。
+
+**B. インターネットに公開する(Let's Encrypt)**
+
+独自のドメインが必要です(DNS をこのサーバーの IP に向け、80 / 443 番ポートを外から届くようにします)。nginx を止めた状態で、証明書を取得して `certs/` に置きます。
+
+```bash
+docker compose -f docker-compose.production.yaml stop web
+sudo certbot certonly --standalone -d rimodeck.example.com
+sudo cp /etc/letsencrypt/live/rimodeck.example.com/fullchain.pem certs/
+sudo cp /etc/letsencrypt/live/rimodeck.example.com/privkey.pem certs/
+docker compose -f docker-compose.production.yaml up -d web
+```
+
+Let's Encrypt の証明書は90日で切れます。更新(`certbot renew`)と `certs/` へのコピー、nginx の再起動は、cron などで自動化してください(この構成には含めていません)。
+
+**C. 自分で用意した証明書を使う**
+
+`fullchain.pem`(中間証明書を含む)と `privkey.pem` という名前で `certs/` に置きます。
+
+証明書を置き換えたら、`docker compose -f docker-compose.production.yaml restart web` で nginx を再起動します。
 
 ### API の接続
 

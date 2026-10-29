@@ -60,7 +60,7 @@ func Login(ctx echo.Context) error {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		// 本番環境がHTTPSの場合は Secure: true にするのが望ましい
+		Secure:   isHTTPS(ctx),
 	})
 
 	return ctx.JSON(http.StatusOK, map[string]string{
@@ -96,6 +96,7 @@ func Logout(ctx echo.Context) error {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   isHTTPS(ctx),
 	})
 
 	if revokeErr != nil {
@@ -112,4 +113,10 @@ func Authenticate(ctx echo.Context) (models.Users, error) {
 		return models.Users{}, services.ErrInvalidToken
 	}
 	return services.AuthenticateToken(cookie.Value)
+}
+
+// HTTPS で届いたリクエストか。nginx 経由では X-Forwarded-Proto: https で判断する(echo の Scheme が見てくれる)。
+// HTTP のときは Cookie に Secure を付けない(付けるとブラウザが Cookie を送り返さず、ログインできなくなるため)。
+func isHTTPS(ctx echo.Context) bool {
+	return ctx.Scheme() == "https"
 }
