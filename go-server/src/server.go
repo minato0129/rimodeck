@@ -381,12 +381,14 @@ func web_main() {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		path := c.Param("*")
-		if !strings.HasSuffix(strings.ToLower(path), ".pdf") {
-			return c.String(http.StatusForbidden, "Only PDF files are accessible")
+		// c.Param("*") は、URL に ( ) などが含まれると %エンコードされたままになり
+		// ファイルが見つからず 404 になるため、デコード済みの URL.Path から取り出す
+		fullPath, status, msg := resolveAssetPath(c.Request().URL.Path, slideFolder)
+		if status != http.StatusOK {
+			return c.String(status, msg)
 		}
 		// ユーザー専用フォルダ内のファイルを取得
-		return c.File(filepath.Join("assets", "Slidepass", slideFolder, path))
+		return c.File(fullPath)
 	})
 	
 	//PDF一覧を取得するための新しいエンドポイント
@@ -408,4 +410,21 @@ func web_main() {
 
 	e.GET("/ws", hello)
 	e.Logger.Fatal(e.Start("0.0.0.0:1323"))
+}
+
+// resolveAssetPath は /assets/ 以下のリクエストパス (デコード済み) を、
+// ユーザー専用フォルダ内の実ファイルパスに変換します。
+// 失敗した場合は HTTP ステータスとメッセージを返します。
+func resolveAssetPath(urlPath, slideFolder string) (string, int, string) {
+	name := strings.TrimPrefix(urlPath, "/assets/")
+	if !strings.HasSuffix(strings.ToLower(name), ".pdf") {
+		return "", http.StatusForbidden, "Only PDF files are accessible"
+	}
+	// パストラバーサル対策: ユーザー専用フォルダの外に出るパスは拒否
+	for _, part := range strings.Split(filepath.ToSlash(name), "/") {
+		if part == ".." {
+			return "", http.StatusForbidden, "Invalid path"
+		}
+	}
+	return filepath.Join("assets", "Slidepass", slideFolder, name), http.StatusOK, ""
 }
