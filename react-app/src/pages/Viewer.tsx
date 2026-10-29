@@ -85,6 +85,8 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   // 発表者モードのウィンドウは、開いたらすぐ「全画面にする」確認を出す
   const [overlayOpen, setOverlayOpen] = useState(presenter)
   const mainRef = useRef<HTMLElement>(null)
+  // スライドと質問の一覧を含む領域(発表者モードの別ウィンドウは、質問も見えるようこちらを全画面にする)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const lastRender = useRef<RenderHandle | null>(null)
   // 他の Viewer から受け取ったページに移ったときは、同じページをもう一度知らせない(ループ防止)
@@ -176,9 +178,10 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   )
 
   const startFullscreen = useCallback(() => {
-    if (mainRef.current) requestFullscreen(mainRef.current)
+    const target = presenter ? bodyRef.current : mainRef.current
+    if (target) requestFullscreen(target)
     setOverlayOpen(false)
-  }, [])
+  }, [presenter])
   const closeOverlay = useCallback(() => setOverlayOpen(false), [])
   const startPresenter = useCallback(() => {
     openPresenterWindow()
@@ -402,7 +405,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
+      <div ref={bodyRef} className="flex flex-1 min-h-0 bg-viewer-bg">
         <main
           ref={mainRef}
           className="relative flex min-h-0 w-full flex-col overflow-hidden rounded-lg bg-gray-100 shadow-xl lg:min-h-full"
@@ -422,6 +425,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             questions={questions.questions}
             currentPage={page}
             highlightId={questions.latest?.id ?? null}
+            onGoTo={goTo}
           />
         ) : (
           <NotePanel text={note.text} loading={note.loading} failed={note.failed} onChange={note.change} />
