@@ -60,6 +60,9 @@ export function openPdf(url: string): { promise: Promise<PdfDoc>; destroy: () =>
   return { promise: task.promise, destroy: () => void task.destroy() }
 }
 
+// 描画の解像度の上限(メモリを使いすぎないように)
+const MAX_PIXEL_RATIO = 3
+
 export type RenderHandle = { cancel: () => void; finished: Promise<void> }
 
 // 指定ページを、box に収まる最大の大きさ(縦横比を保つ)で canvas に描画する。
@@ -84,11 +87,16 @@ export function renderFitted(
       // 画面が横長なら高さに、縦長なら幅に合わせる
       const scale =
         box.width / box.height > base.width / base.height ? box.height / base.height : box.width / base.width
-      const viewport = page.getViewport({ scale })
+      // 高解像度の画面(スマホなど)でぼやけないよう、画面の画素密度の分だけ大きく描いて、表示の大きさは変えない
+      const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), MAX_PIXEL_RATIO)
+      const cssViewport = page.getViewport({ scale })
+      const viewport = page.getViewport({ scale: scale * dpr })
       const ctx = canvas.getContext('2d')
       if (!ctx) return
       canvas.width = viewport.width
       canvas.height = viewport.height
+      canvas.style.width = `${cssViewport.width}px`
+      canvas.style.height = `${cssViewport.height}px`
       task = page.render({ canvas, canvasContext: ctx, viewport })
       await task.promise
     } catch (error) {

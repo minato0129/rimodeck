@@ -14,6 +14,8 @@ type Handlers = {
   onRemoteCommand: (command: string, api: Api) => void
   // 同じ ID の別の Viewer(発表者モードの別ウィンドウなど)からの状態
   onPeerStatus: (status: Partial<ViewerStatus>) => void
+  // 傾聴者共有で、いま見ている人数
+  onAudienceCount?: (count: number) => void
 }
 
 type ServerMessage = { type: string; status?: number; data?: string }
@@ -79,6 +81,8 @@ export function useViewerSocket(existingId: string | null, handlers: Handlers, e
         } catch (e) {
           console.error('Failed to parse viewer_status data:', e)
         }
+      } else if (message.type === 'audience_count' && message.status === 200) {
+        handlersRef.current.onAudienceCount?.(Number(message.data) || 0)
       } else if (message.type === 'error') {
         console.error('WebSocket Error:', message.data)
       }

@@ -183,6 +183,13 @@ func hello(c echo.Context) error {
 				}
 			}
 		} else if receivedMsg.Type == "viewer_update" {
+			// 共有中なら、傾聴者にもページを知らせる
+			var viewerState struct {
+				PageIndex int `json:"page_index"`
+			}
+			if json.Unmarshal([]byte(receivedMsg.Data), &viewerState) == nil {
+				updateSharePage(uid, viewerState.PageIndex)
+			}
 			// Viewer自身の状態更新を、登録されているすべてのRemoteにブロードキャスト
 			mu.RLock()
 			if remotes, ok := remoteMap[uid]; ok {
@@ -409,6 +416,12 @@ func web_main() {
     e.Match([]string{http.MethodGet, http.MethodPost}, "/note", controllers.HandleNote)
 
 	e.GET("/ws", hello)
+
+	// 傾聴者共有 (共有の開始・停止はログイン必須、傾聴者の閲覧はログイン不要)
+	e.POST("/share", startShareHandler)
+	e.POST("/share/stop", stopShareHandler)
+	e.GET("/shared/:token/pdf", sharedPdfHandler)
+	e.GET("/ws/watch", watchWsHandler)
 	e.Logger.Fatal(e.Start("0.0.0.0:1323"))
 }
 
