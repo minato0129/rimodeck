@@ -58,6 +58,7 @@ func TestShareLifecycle(t *testing.T) {
 		Page:      1,
 		CreatedAt: time.Now(),
 		audience:  make(map[*websocket.Conn]bool),
+		lastAsked: make(map[string]time.Time),
 	}
 	sharesByToken[s.Token] = s
 	sharesByFolder[s.Folder] = s

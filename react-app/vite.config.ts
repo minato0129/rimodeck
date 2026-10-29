@@ -40,6 +40,7 @@ export default defineConfig({
       '/assets': api,
       '/shared': api,
       '/share': api,
+      '/question': api,
       '/ws': { ...api, ws: true },
     },
   },
