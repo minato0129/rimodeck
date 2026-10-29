@@ -108,6 +108,11 @@ func createToken(userID string, username string) (string, time.Time, error) {
 		return "", time.Time{}, err
 	}
 
+	// 期限の切れたトークンを掃除する(失敗しても、ログイン自体は続ける)
+	if err := repositories.DeleteExpiredTokens(time.Now().Unix()); err != nil {
+		log.Printf("failed to delete expired tokens: %v", err)
+	}
+
 	// トークンをデータベースに保存
 	if err := repositories.RegisterToken(tokenString, userID, expirationTime.Unix()); err != nil {
 		return "", time.Time{}, err
@@ -172,4 +177,9 @@ func AuthenticateToken(tokenString string) (models.Users, error) {
 		return models.Users{}, ErrInvalidToken
 	}
 	return user, nil
+}
+
+// トークンを失効させる(ログアウト)。以降、このトークンは AuthenticateToken を通らない。
+func RevokeToken(tokenString string) error {
+	return repositories.DeleteToken(tokenString)
 }

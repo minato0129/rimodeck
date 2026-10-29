@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"rimodeck/models"
 	"rimodeck/services"
@@ -70,6 +71,15 @@ func Login(ctx echo.Context) error {
 
 // ログアウト
 func Logout(ctx echo.Context) error {
+	// サーバー側でもトークンを失効させる(Cookie を消すだけだと、控えておいたトークンが期限まで使える)
+	var revokeErr error
+	if tokenCookie, err := ctx.Cookie(TokenCookieName); err == nil && tokenCookie.Value != "" {
+		revokeErr = services.RevokeToken(tokenCookie.Value)
+		if revokeErr != nil {
+			log.Printf("failed to revoke token: %v", revokeErr)
+		}
+	}
+
 	// 以前のログインで残っているかもしれない username の Cookie も消す
 	cookie := new(http.Cookie)
 	cookie.Name = "username"
@@ -88,6 +98,9 @@ func Logout(ctx echo.Context) error {
 		SameSite: http.SameSiteLaxMode,
 	})
 
+	if revokeErr != nil {
+		return ctx.JSON(http.StatusInternalServerError, "Failed to revoke token")
+	}
 	return ctx.JSON(http.StatusOK, "Logout successful")
 }
 
