@@ -1,20 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, authHeaders } from './api'
+import { ApiError, apiFetch } from './api'
 
 async function fetchNote(pdfPath: string, page: number, signal: AbortSignal): Promise<string> {
-  const response = await fetch(`/note?pdf_path=${encodeURIComponent(pdfPath)}&page_index=${page}`, {
-    headers: authHeaders(),
-    signal,
-  })
+  const response = await apiFetch(`/note?pdf_path=${encodeURIComponent(pdfPath)}&page_index=${page}`, { signal })
   if (!response.ok) throw new ApiError(response.status, `HTTP error! status: ${response.status}`)
   const data = await response.json()
   return data.content || ''
 }
 
 async function saveNoteRequest(pdfPath: string, page: number, content: string): Promise<void> {
-  const response = await fetch('/note', {
+  const response = await apiFetch('/note', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pdf_path: pdfPath, page_index: page, content }),
   })
   if (!response.ok) throw new ApiError(response.status, `HTTP error! status: ${response.status}`)

@@ -14,7 +14,6 @@ import (
 	// NOTE: utils.Genid() は、一意のIDを生成する関数として仮定します。
 	"rimodeck/utils"
 	"rimodeck/controllers"
-	"rimodeck/repositories"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -209,23 +208,8 @@ func hello(c echo.Context) error {
 
 // ユーザーのSlidepass（UUIDフォルダ名）を取得するヘルパー
 func getUserSlidepass(c echo.Context) (string, error) {
-	// まずクッキーからユーザー名を取得
-	cookie, err := c.Cookie("username")
-	username := ""
-	if err == nil {
-		username = cookie.Value
-	}
-
-	// クッキーにない場合はヘッダーから取得 (後方互換性のため)
-	if username == "" {
-		username = c.Request().Header.Get("X-Username")
-	}
-
-	if username == "" {
-		return "", fmt.Errorf("user not identified")
-	}
-
-	user, err := repositories.GetUserByName(username)
+	// ログイン中のユーザーを確かめる(Cookie の token を検証)
+	user, err := controllers.Authenticate(c)
 	if err != nil {
 		return "", err
 	}

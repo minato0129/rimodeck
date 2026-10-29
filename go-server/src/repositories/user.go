@@ -59,3 +59,12 @@ func GetUserByName(username string) (models.Users, error) {
 	}
 	return user, nil
 }
+
+func GetUserByID(userID string) (models.Users, error) {
+	var user models.Users
+	result := db.Where("user_id = ?", userID).First(&user)
+	if result.Error != nil {
+		return models.Users{}, result.Error
+	}
+	return user, nil
+}
