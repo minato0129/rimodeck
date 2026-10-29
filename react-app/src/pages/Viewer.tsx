@@ -330,6 +330,16 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             ページ <span>{page}</span> / <span>{total}</span>
           </span>
           {/* 発表者モードの別ウィンドウは、傾聴者みんなが見る画面なので、操作のボタンは出さない */}
+          {presenter && (
+            <button
+              type="button"
+              onClick={startFullscreen}
+              className="flex items-center justify-center rounded-lg bg-gray-800 px-3 py-2 text-white transition-colors hover:bg-gray-700"
+            >
+              <Icon name="fullscreen" className="text-xl" />
+              <span className="ml-2 text-sm font-medium">全画面にする</span>
+            </button>
+          )}
           {!presenter && (
             <button
               type="button"
