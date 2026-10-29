@@ -19,7 +19,9 @@ export class ApiError extends Error {
 export async function fetchPdfs(): Promise<string[]> {
   const response = await fetch('/pdfs', { headers: authHeaders() })
   if (!response.ok) throw new ApiError(response.status, `HTTP error! status: ${response.status}`)
-  return response.json()
+  // PDF が1つもないとき、サーバーは [] ではなく null を返すことがある。空の一覧として扱う。
+  const list: string[] | null = await response.json()
+  return list ?? []
 }
 
 export async function uploadPdf(file: File): Promise<void> {
