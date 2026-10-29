@@ -26,7 +26,7 @@ const SAVE_DELAY_MS = 1000
 // - 入力が1秒止まったら保存する(保存できたら onSaved を呼ぶ)
 // - 保存を待たずにページが変わっても、入力したページに保存する
 //   (現行版は、保存の瞬間のページ番号を使うため、その間にページが変わると入力が失われていた)
-export function useNote(pdfPath: string, page: number, onSaved: () => void) {
+export function useNote(pdfPath: string, page: number, onSaved: () => void, enabled = true) {
   const key = `${pdfPath}#${page}`
   const [loaded, setLoaded] = useState<{ key: string; text: string } | null>(null)
   const [failedKey, setFailedKey] = useState<string | null>(null)
@@ -54,7 +54,7 @@ export function useNote(pdfPath: string, page: number, onSaved: () => void) {
   // 読み込み。ページが変わる・閉じるときは、先に未保存の入力を保存する。
   // 読み込みは直前の保存が終わってから行う(古い内容で上書きされないように)。
   useEffect(() => {
-    if (page < 1) return
+    if (page < 1 || !enabled) return
     const controller = new AbortController()
     saving.current
       .then(() => fetchNote(pdfPath, page, controller.signal))
@@ -68,7 +68,7 @@ export function useNote(pdfPath: string, page: number, onSaved: () => void) {
       controller.abort() // 前のページの応答が遅れて届いても、反映しない
       flush()
     }
-  }, [pdfPath, page, key, reloadTick, flush])
+  }, [pdfPath, page, key, reloadTick, flush, enabled])
 
   const change = useCallback(
     (value: string) => {

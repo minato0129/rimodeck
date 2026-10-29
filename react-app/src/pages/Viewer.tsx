@@ -6,6 +6,7 @@ import Icon from '../components/Icon'
 import NotePanel from '../components/NotePanel'
 import PresentationOverlay from '../components/PresentationOverlay'
 import QrDialog from '../components/QrDialog'
+import QuestionBoard from '../components/QuestionBoard'
 import QuestionPanel from '../components/QuestionPanel'
 import ShareDialog from '../components/ShareDialog'
 import { fileNameOf } from '../lib/api'
@@ -80,7 +81,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   const [audience, setAudience] = useState(0)
   // 傾聴者からの質問(発表者モードの別ウィンドウでは扱わない)
   const [questionsOpen, setQuestionsOpen] = useState(false)
-  const questions = useQuestions(pdfUrl, !presenter)
+  const questions = useQuestions(pdfUrl)
   // 発表者モードのウィンドウは、開いたらすぐ「全画面にする」確認を出す
   const [overlayOpen, setOverlayOpen] = useState(presenter)
   const mainRef = useRef<HTMLElement>(null)
@@ -112,7 +113,8 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   // メモを保存したら、Remote などにも知らせる(sendStatus は、この下の WebSocket のフックが返す)
   const sendRef = useRef<(s: ViewerStatus) => void>(() => {})
   // 知らせるのは、保存したページではなく「いま表示中のページ」(保存を待つ間にページが変わっても、古いページを知らせない)
-  const note = useNote(pdfUrl, page, () => sendRef.current({ page_index: latest.current.page, pdf_path: pdfUrl }))
+  // 発表者モードの別ウィンドウ(傾聴者に見せる画面)には、メモを出さない
+  const note = useNote(pdfUrl, page, () => sendRef.current({ page_index: latest.current.page, pdf_path: pdfUrl }), !presenter)
 
   const syncPage = usePageSync(
     presenter,
@@ -318,26 +320,31 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4">
         <div className="flex items-center gap-3">
           <img src="/logos/logo-light.svg" alt="rimodeck" className="h-6" />
-          <span className="text-xs text-gray-500 ml-1">{username}</span>
+          {!presenter && <span className="text-xs text-gray-500 ml-1">{username}</span>}
         </div>
         <div className="flex items-center gap-4">
           <span className="text-base font-medium text-gray-700" aria-live="polite">
             ページ <span>{page}</span> / <span>{total}</span>
           </span>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="text-sm text-gray-500 hover:text-red-500 transition duration-150"
-          >
-            ログアウト
-          </button>
-          <Link
-            to="/"
-            className="flex items-center justify-center rounded-lg bg-gray-500 px-3 py-2 text-white transition-colors hover:bg-gray-700"
-          >
-            <Icon name="folder_open" className="text-xl" />
-            <span className="ml-2 hidden text-sm font-medium sm:inline">ファイル選択に戻る</span>
-          </Link>
+          {/* 発表者モードの別ウィンドウは、傾聴者みんなが見る画面なので、操作のボタンは出さない */}
+          {!presenter && (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-sm text-gray-500 hover:text-red-500 transition duration-150"
+            >
+              ログアウト
+            </button>
+          )}
+          {!presenter && (
+            <Link
+              to="/"
+              className="flex items-center justify-center rounded-lg bg-gray-500 px-3 py-2 text-white transition-colors hover:bg-gray-700"
+            >
+              <Icon name="folder_open" className="text-xl" />
+              <span className="ml-2 hidden text-sm font-medium sm:inline">ファイル選択に戻る</span>
+            </Link>
+          )}
           {!presenter && (
             <button
               type="button"
@@ -410,7 +417,15 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           </div>
         </main>
 
-        <NotePanel text={note.text} loading={note.loading} failed={note.failed} onChange={note.change} />
+        {presenter ? (
+          <QuestionBoard
+            questions={questions.questions}
+            currentPage={page}
+            highlightId={questions.latest?.id ?? null}
+          />
+        ) : (
+          <NotePanel text={note.text} loading={note.loading} failed={note.failed} onChange={note.change} />
+        )}
       </div>
 
       {overlayOpen && (
@@ -421,7 +436,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           presenterWindow={presenter}
         />
       )}
-      {toast && !questionsOpen && (
+      {toast && !questionsOpen && !presenter && (
         <button
           type="button"
           role="status"

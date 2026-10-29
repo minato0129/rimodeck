@@ -12,6 +12,15 @@ export type Question = {
 
 export const MAX_QUESTION_LENGTH = 200
 
+// 同じブラウザの別ウィンドウ(メインと、プロジェクターに映す発表者モード)で、質問の変更をそろえる
+const CHANNEL = 'rimodeck_questions'
+
+type SyncOp =
+  | { type: 'add'; q: Question }
+  | { type: 'answered'; id: number; answered: boolean }
+  | { type: 'delete'; id: number }
+type SyncMessage = { pdf: string; op: SyncOp }
+
 async function fetchQuestions(pdfPath: string, signal: AbortSignal): Promise<Question[]> {
   const response = await apiFetch(`/questions?pdf_path=${encodeURIComponent(pdfPath)}`, { signal })
   if (!response.ok) throw new ApiError(response.status, `HTTP error! status: ${response.status}`)
@@ -60,7 +69,8 @@ export function useQuestions(pdfPath: string, enabled = true) {
     return () => controller.abort()
   }, [pdfPath, enabled])
 
-  const addQuestion = useCallback((q: Question) => {
+  // 質問が届いたときの、この画面での反映(通知の表示・件数)
+  const applyAdd = useCallback((q: Question) => {
     setQuestions((prev) => (prev.some((x) => x.id === q.id) ? prev : sortQuestions([...prev, q])))
     if (!panelOpen.current) setUnseen((n) => n + 1)
     // 通知は、しばらくしたら自動で消す
@@ -68,6 +78,44 @@ export function useQuestions(pdfPath: string, enabled = true) {
     window.clearTimeout(latestTimer.current)
     latestTimer.current = window.setTimeout(() => setLatest(null), 5000)
   }, [])
+  const applyAnswered = useCallback((id: number, answered: boolean) => {
+    setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, answered } : q)))
+  }, [])
+  const applyDelete = useCallback((id: number) => {
+    setQuestions((prev) => prev.filter((q) => q.id !== id))
+  }, [])
+
+  // 別ウィンドウへの知らせ。別ウィンドウからの知らせは、この画面にだけ反映する(送り返さない)
+  const channelRef = useRef<BroadcastChannel | null>(null)
+  useEffect(() => {
+    if (!enabled || typeof BroadcastChannel === 'undefined') return // 古いブラウザでは、同期なしで動かす
+    const channel = new BroadcastChannel(CHANNEL)
+    channelRef.current = channel
+    channel.onmessage = (event: MessageEvent<SyncMessage>) => {
+      const { pdf, op } = event.data
+      if (pdf !== pdfPath) return
+      if (op.type === 'add') applyAdd(op.q)
+      else if (op.type === 'answered') applyAnswered(op.id, op.answered)
+      else applyDelete(op.id)
+    }
+    return () => {
+      channel.close()
+      channelRef.current = null
+    }
+  }, [pdfPath, enabled, applyAdd, applyAnswered, applyDelete])
+  const broadcast = useCallback(
+    (op: SyncOp) => channelRef.current?.postMessage({ pdf: pdfPath, op } satisfies SyncMessage),
+    [pdfPath],
+  )
+
+  // WebSocket で届いた新着(メインの画面だけが受け取る)
+  const addQuestion = useCallback(
+    (q: Question) => {
+      applyAdd(q)
+      broadcast({ type: 'add', q })
+    },
+    [applyAdd, broadcast],
+  )
 
   const setPanelOpen = useCallback((open: boolean) => {
     panelOpen.current = open
@@ -77,26 +125,36 @@ export function useQuestions(pdfPath: string, enabled = true) {
     }
   }, [])
 
-  const toggleAnswered = useCallback(async (id: number, answered: boolean) => {
-    setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, answered } : q)))
-    try {
-      await post('/question/answered', { id, answered })
-    } catch (error) {
-      console.error('Failed to update question:', error)
-      setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, answered: !answered } : q)))
-    }
-  }, [])
+  const toggleAnswered = useCallback(
+    async (id: number, answered: boolean) => {
+      applyAnswered(id, answered)
+      try {
+        await post('/question/answered', { id, answered })
+        broadcast({ type: 'answered', id, answered })
+      } catch (error) {
+        console.error('Failed to update question:', error)
+        applyAnswered(id, !answered)
+      }
+    },
+    [applyAnswered, broadcast],
+  )
 
-  const remove = useCallback(async (id: number) => {
-    try {
-      await post('/question/delete', { id })
-      setQuestions((prev) => prev.filter((q) => q.id !== id))
-    } catch (error) {
-      // すでに消えている(404)ときも、一覧からは外す
-      if (error instanceof ApiError && error.status === 404) setQuestions((prev) => prev.filter((q) => q.id !== id))
-      else console.error('Failed to delete question:', error)
-    }
-  }, [])
+  const remove = useCallback(
+    async (id: number) => {
+      try {
+        await post('/question/delete', { id })
+      } catch (error) {
+        // すでに消えている(404)ときも、一覧からは外す
+        if (!(error instanceof ApiError && error.status === 404)) {
+          console.error('Failed to delete question:', error)
+          return
+        }
+      }
+      applyDelete(id)
+      broadcast({ type: 'delete', id })
+    },
+    [applyDelete, broadcast],
+  )
 
   return { questions, failed, unseen, latest, addQuestion, setPanelOpen, toggleAnswered, remove }
 }
