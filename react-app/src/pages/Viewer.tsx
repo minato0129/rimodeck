@@ -6,11 +6,13 @@ import Icon from '../components/Icon'
 import NotePanel from '../components/NotePanel'
 import PresentationOverlay from '../components/PresentationOverlay'
 import QrDialog from '../components/QrDialog'
+import QuestionPanel from '../components/QuestionPanel'
 import ShareDialog from '../components/ShareDialog'
 import { fileNameOf } from '../lib/api'
 import { requestFullscreen, useFullscreenChange } from '../lib/fullscreen'
 import { useNote } from '../lib/notes'
 import { startShare, stopShare } from '../lib/share'
+import { useQuestions } from '../lib/questions'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
 import { useLogout } from '../lib/useLogout'
@@ -76,6 +78,9 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   const [shareToken, setShareToken] = useState<string | null>(null)
   const [shareError, setShareError] = useState<string | null>(null)
   const [audience, setAudience] = useState(0)
+  // 傾聴者からの質問(発表者モードの別ウィンドウでは扱わない)
+  const [questionsOpen, setQuestionsOpen] = useState(false)
+  const questions = useQuestions(pdfUrl, !presenter)
   // 発表者モードのウィンドウは、開いたらすぐ「全画面にする」確認を出す
   const [overlayOpen, setOverlayOpen] = useState(presenter)
   const mainRef = useRef<HTMLElement>(null)
@@ -146,6 +151,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
         }
       },
       onAudienceCount: setAudience,
+      onQuestion: questions.addQuestion,
       onPeerStatus: (peer) => {
         if (peer.page_index !== undefined && peer.page_index !== latest.current.page) {
           skipBroadcastFor.current = peer.page_index
@@ -296,6 +302,16 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
       setShareError('共有を止められませんでした。')
     }
   }, [])
+  const { latest: latestQuestion, setPanelOpen } = questions
+  const toast = latestQuestion ? `新しい質問があります (${latestQuestion.page} ページ)` : null
+  const openQuestions = useCallback(() => {
+    setQuestionsOpen(true)
+    setPanelOpen(true)
+  }, [setPanelOpen])
+  const closeQuestions = useCallback(() => {
+    setQuestionsOpen(false)
+    setPanelOpen(false)
+  }, [setPanelOpen])
 
   return (
     <div className="bg-viewer-bg font-sans flex h-screen flex-col overflow-hidden text-viewer-text">
@@ -335,13 +351,33 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           {!presenter && (
             <button
               type="button"
+              onClick={openQuestions}
+              title="傾聴者からの質問"
+              className="relative flex items-center justify-center rounded-lg bg-gray-800 px-3 py-2 text-white transition-colors hover:bg-gray-700"
+            >
+              <Icon name="forum" className="text-xl" />
+              <span className="ml-2 hidden whitespace-nowrap text-sm font-medium xl:inline">質問</span>
+              {questions.unseen > 0 && (
+                <span
+                  aria-label={`新着の質問 ${questions.unseen} 件`}
+                  className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold"
+                >
+                  {questions.unseen}
+                </span>
+              )}
+            </button>
+          )}
+          {!presenter && (
+            <button
+              type="button"
               onClick={() => setShareOpen(true)}
+              title="傾聴者に共有"
               className={`flex items-center justify-center rounded-lg px-3 py-2 text-white transition-colors ${
                 shareToken ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-800 hover:bg-gray-700'
               }`}
             >
               <Icon name="groups" className="text-xl" />
-              <span className="ml-2 hidden text-sm font-medium sm:inline">
+              <span className="ml-2 hidden whitespace-nowrap text-sm font-medium xl:inline">
                 {shareToken ? `共有中 (${audience})` : '傾聴者に共有'}
               </span>
             </button>
@@ -383,6 +419,27 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           onCancel={closeOverlay}
           onPresenter={presenter ? undefined : startPresenter}
           presenterWindow={presenter}
+        />
+      )}
+      {toast && !questionsOpen && (
+        <button
+          type="button"
+          role="status"
+          onClick={openQuestions}
+          className="fixed bottom-6 right-6 z-40 rounded-lg bg-gray-900 px-4 py-3 text-sm font-medium text-white shadow-lg"
+        >
+          {toast}
+        </button>
+      )}
+      {questionsOpen && !presenter && (
+        <QuestionPanel
+          questions={questions.questions}
+          currentPage={page}
+          failed={questions.failed}
+          onGoTo={goTo}
+          onToggleAnswered={questions.toggleAnswered}
+          onDelete={questions.remove}
+          onClose={closeQuestions}
         />
       )}
       {shareOpen && !presenter && (

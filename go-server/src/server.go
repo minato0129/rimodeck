@@ -14,6 +14,7 @@ import (
 	// NOTE: utils.Genid() は、一意のIDを生成する関数として仮定します。
 	"rimodeck/utils"
 	"rimodeck/controllers"
+	"rimodeck/repositories"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -311,10 +312,11 @@ func getPdfList(c echo.Context) error {
 
 // PDFファイルを削除するハンドラ
 func deletePdfHandler(c echo.Context) error {
-	slideFolder, err := getUserSlidepass(c)
+	user, err := controllers.Authenticate(c)
 	if err != nil {
 		return c.String(http.StatusUnauthorized, "Unauthorized")
 	}
+	slideFolder := user.Slidepass
 
     // クライアントから送信されるJSONの構造
     type DeleteRequest struct {
@@ -347,6 +349,11 @@ func deletePdfHandler(c echo.Context) error {
     if err := os.Remove(fullPath); err != nil {
         log.Printf("Failed to delete file %s: %v", fullPath, err)
         return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("ファイルの削除に失敗しました: %v", err)})
+    }
+
+    // この PDF への質問も消す(失敗しても、ファイルは削除済みなので続行)
+    if err := repositories.DeleteQuestionsByPdf(user.UserID, fileName); err != nil {
+        log.Printf("Failed to delete questions for %s: %v", fileName, err)
     }
 
     log.Printf("Successfully deleted file: %s", fullPath)
@@ -422,6 +429,12 @@ func web_main() {
 	e.POST("/share/stop", stopShareHandler)
 	e.GET("/shared/:token/pdf", sharedPdfHandler)
 	e.GET("/ws/watch", watchWsHandler)
+
+	// 傾聴者からの質問 (送信はログイン不要・共有トークンが鍵、閲覧と管理はログイン必須)
+	e.POST("/shared/:token/question", sharedQuestionHandler)
+	e.GET("/questions", listQuestionsHandler)
+	e.POST("/question/answered", answerQuestionHandler)
+	e.POST("/question/delete", deleteQuestionHandler)
 	e.Logger.Fatal(e.Start("0.0.0.0:1323"))
 }
 

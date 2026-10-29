@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"rimodeck/controllers"
+
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 )
@@ -25,12 +27,14 @@ const shareLifetime = 12 * time.Hour
 
 type share struct {
 	Token     string
+	UserID    string // 発表者のユーザーID (質問の保存先)
 	Folder    string // 発表者の Slidepass フォルダ名
 	PdfName   string // ファイル名のみ
 	ViewerID  string // 発表者の Viewer ID (ページの更新を受け取る相手)
 	Page      int
 	CreatedAt time.Time
 	audience  map[*websocket.Conn]bool
+	lastAsked map[string]time.Time // 傾聴者(IP)ごとの、最後に質問を送った時刻
 }
 
 var (
@@ -91,18 +95,23 @@ func stopShareLocked(s *share) {
 	notifyAudienceCountLocked(s)
 }
 
-// 発表者の Viewer に、傾聴者の人数を知らせる(shareMu を持った状態で呼ぶ)
-func notifyAudienceCountLocked(s *share) {
-	msg, _ := json.Marshal(ReturnMessage{
-		Type:   "audience_count",
-		Status: 200,
-		Data:   strconv.Itoa(len(s.audience)),
-	})
+// 発表者の Viewer に、メッセージを送る(shareMu を持った状態で呼ぶ)
+func notifyViewerLocked(s *share, message ReturnMessage) {
+	msg, _ := json.Marshal(message)
 	mu.Lock()
 	defer mu.Unlock()
 	for ws := range wsMap[s.ViewerID] {
 		_ = ws.WriteMessage(websocket.TextMessage, msg)
 	}
+}
+
+// 発表者の Viewer に、傾聴者の人数を知らせる(shareMu を持った状態で呼ぶ)
+func notifyAudienceCountLocked(s *share) {
+	notifyViewerLocked(s, ReturnMessage{
+		Type:   "audience_count",
+		Status: 200,
+		Data:   strconv.Itoa(len(s.audience)),
+	})
 }
 
 // 有効な共有をトークンで探す(shareMu を持った状態で呼ぶ)
@@ -120,10 +129,11 @@ func findShareLocked(token string) *share {
 
 // POST /share (ログイン必須): 共有を始める。同じ PDF を共有中なら、同じトークンを返す(ページの再読み込み対策)
 func startShareHandler(c echo.Context) error {
-	folder, err := getUserSlidepass(c)
+	user, err := controllers.Authenticate(c)
 	if err != nil {
 		return c.String(http.StatusUnauthorized, "Unauthorized")
 	}
+	folder := user.Slidepass
 	req := new(shareRequest)
 	if err := c.Bind(req); err != nil || req.PdfPath == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "無効なリクエストです。"})
@@ -145,6 +155,7 @@ func startShareHandler(c echo.Context) error {
 		if s.PdfName == name {
 			// 作り直さず、新しい Viewer につなぎ替える
 			s.ViewerID = req.ViewerID
+			s.UserID = user.UserID
 			s.Page = page
 			notifyAudienceCountLocked(s)
 			broadcastSharePageLocked(s)
@@ -159,12 +170,14 @@ func startShareHandler(c echo.Context) error {
 	}
 	s := &share{
 		Token:     token,
+		UserID:    user.UserID,
 		Folder:    folder,
 		PdfName:   name,
 		ViewerID:  req.ViewerID,
 		Page:      page,
 		CreatedAt: time.Now(),
 		audience:  make(map[*websocket.Conn]bool),
+		lastAsked: make(map[string]time.Time),
 	}
 	sharesByToken[token] = s
 	sharesByFolder[folder] = s

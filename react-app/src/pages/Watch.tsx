@@ -3,6 +3,7 @@
 // - 自分で動かすモード: 前後のボタン・スワイプで動かすと切り替わる。「発表者に追従」で戻る
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import AskForm from '../components/AskForm'
 import Icon from '../components/Icon'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { useWatchSocket } from '../lib/watch'
@@ -35,6 +36,12 @@ function Watching({ token }: { token: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const lastRender = useRef<RenderHandle | null>(null)
   const touchStart = useRef<{ x: number; y: number } | null>(null)
+  // 質問フォーム(閉じても入力は残す)
+  const [askOpen, setAskOpen] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [sentNotice, setSentNotice] = useState(false)
+  const noticeTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
   const total = doc?.numPages ?? 0
   const clamp = (n: number) => Math.min(Math.max(n, 1), Math.max(total, 1))
@@ -105,6 +112,13 @@ function Watching({ token }: { token: string }) {
     [page, serverPage, total],
   )
 
+  const handleSent = useCallback(() => {
+    setAskOpen(false)
+    setSentNotice(true)
+    window.clearTimeout(noticeTimer.current)
+    noticeTimer.current = window.setTimeout(() => setSentNotice(false), 3000)
+  }, [])
+
   function onTouchStart(e: React.TouchEvent) {
     const t = e.touches[0]
     touchStart.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null
@@ -137,12 +151,29 @@ function Watching({ token }: { token: string }) {
         className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-gray-100"
       >
         <canvas ref={canvasRef} className="h-auto max-h-full w-auto max-w-full shadow-md" />
+        {sentNotice && (
+          <div role="status" className="absolute top-3 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow">
+            質問を送りました
+          </div>
+        )}
         {(loadState !== 'ready' || page < 1) && (
           <div role={loadState === 'error' ? 'alert' : 'status'} className="absolute px-4 text-center text-lg font-bold">
             {loadState === 'error' ? 'スライドの読み込みに失敗しました。' : '読み込み中...'}
           </div>
         )}
       </main>
+
+      <div className="flex shrink-0 justify-end border-t border-gray-200 bg-white px-2 pt-2">
+        <button
+          type="button"
+          onClick={() => setAskOpen(true)}
+          disabled={total < 1}
+          className="flex items-center rounded-full bg-gray-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+        >
+          <Icon name="forum" className="mr-1 text-lg" />
+          質問する{draft.trim() ? '(入力中)' : ''}
+        </button>
+      </div>
 
       <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-gray-200 bg-white p-2">
         <button
@@ -183,6 +214,18 @@ function Watching({ token }: { token: string }) {
           <Icon name="chevron_right" className="text-3xl" />
         </button>
       </footer>
+      {askOpen && (
+        <AskForm
+          token={token}
+          total={total}
+          following={following}
+          initialPage={Math.max(page, 1)}
+          draft={draft}
+          onDraftChange={setDraft}
+          onSent={handleSent}
+          onClose={() => setAskOpen(false)}
+        />
+      )}
     </div>
   )
 }
