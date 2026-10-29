@@ -304,7 +304,8 @@ func getPdfList(c echo.Context) error {
 		return c.String(http.StatusInternalServerError, "Failed to read PDF directory")
 	}
 
-	var pdfFiles []string
+	// PDF がなくても、JSON は null ではなく [] になるよう、空のスライスで初期化する
+	pdfFiles := []string{}
 	for _, file := range files {
 		if !file.IsDir() && filepath.Ext(file.Name()) == ".pdf" {
 			// パスをクライアント向けに /assets/filename.pdf の形式で返す
