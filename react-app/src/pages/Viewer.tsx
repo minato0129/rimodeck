@@ -390,6 +390,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           token={shareToken}
           audience={audience}
           canStart={viewerId !== null}
+          socketStatus={status}
           error={shareError}
           onStart={handleStartShare}
           onStop={handleStopShare}

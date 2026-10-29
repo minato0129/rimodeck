@@ -2,11 +2,13 @@ import { QRCodeSVG } from 'qrcode.react'
 import { useEffect, useState } from 'react'
 import Icon from './Icon'
 import { watchUrl } from '../lib/share'
+import type { SocketStatus } from '../lib/viewer'
 
 type Props = {
   token: string | null
   audience: number
   canStart: boolean
+  socketStatus: SocketStatus
   error: string | null
   onStart: () => void
   onStop: () => void
@@ -14,7 +16,7 @@ type Props = {
 }
 
 // 傾聴者(会場の後ろの席の人など)が、自分のスマホでスライドを見るための共有ダイアログ
-export default function ShareDialog({ token, audience, canStart, error, onStart, onStop, onClose }: Props) {
+export default function ShareDialog({ token, audience, canStart, socketStatus, error, onStart, onStop, onClose }: Props) {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -104,8 +106,15 @@ export default function ShareDialog({ token, audience, canStart, error, onStart,
                 disabled={!canStart}
                 className="w-full rounded-lg bg-primary-blue px-4 py-2 text-sm font-medium text-white hover:bg-primary-blue/80 disabled:opacity-50"
               >
-                {canStart ? '共有を開始' : '接続中...'}
+                共有を開始
               </button>
+              {!canStart && (
+                <p role="status" className="text-xs text-gray-500">
+                  {socketStatus === 'error' || socketStatus === 'closed'
+                    ? 'サーバーとの接続(WebSocket)に失敗しました。Go サーバーが起動しているか確認して、画面を再読み込みしてください。'
+                    : 'サーバーに接続しています...'}
+                </p>
+              )}
             </>
           )}
           {error && (
