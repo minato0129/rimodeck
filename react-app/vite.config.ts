@@ -38,6 +38,8 @@ export default defineConfig({
       '/delete-pdf': api,
       '/note': api,
       '/assets': api,
+      '/shared': api,
+      '/share': api,
       '/ws': { ...api, ws: true },
     },
   },

@@ -6,9 +6,11 @@ import Icon from '../components/Icon'
 import NotePanel from '../components/NotePanel'
 import PresentationOverlay from '../components/PresentationOverlay'
 import QrDialog from '../components/QrDialog'
+import ShareDialog from '../components/ShareDialog'
 import { fileNameOf } from '../lib/api'
 import { requestFullscreen, useFullscreenChange } from '../lib/fullscreen'
 import { useNote } from '../lib/notes'
+import { startShare, stopShare } from '../lib/share'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
 import { useLogout } from '../lib/useLogout'
@@ -69,6 +71,11 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [page, setPage] = useState(0)
   const [qrOpen, setQrOpen] = useState(false)
+  // 傾聴者共有: token があれば共有中。共有ダイアログを閉じても共有は続く
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareToken, setShareToken] = useState<string | null>(null)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [audience, setAudience] = useState(0)
   // 発表者モードのウィンドウは、開いたらすぐ「全画面にする」確認を出す
   const [overlayOpen, setOverlayOpen] = useState(presenter)
   const mainRef = useRef<HTMLElement>(null)
@@ -138,6 +145,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             console.log('Unknown remote command:', command)
         }
       },
+      onAudienceCount: setAudience,
       onPeerStatus: (peer) => {
         if (peer.page_index !== undefined && peer.page_index !== latest.current.page) {
           skipBroadcastFor.current = peer.page_index
@@ -266,6 +274,28 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   }, [next, prev])
 
   const closeQr = useCallback(() => setQrOpen(false), [])
+  const closeShare = useCallback(() => setShareOpen(false), [])
+  const handleStartShare = useCallback(async () => {
+    if (!viewerId) return
+    setShareError(null)
+    try {
+      setShareToken(await startShare(pdfUrl, viewerId, latest.current.page))
+    } catch (e) {
+      console.error('Failed to start share:', e)
+      setShareError('共有を始められませんでした。')
+    }
+  }, [viewerId, pdfUrl])
+  const handleStopShare = useCallback(async () => {
+    setShareError(null)
+    try {
+      await stopShare()
+      setShareToken(null)
+      setAudience(0)
+    } catch (e) {
+      console.error('Failed to stop share:', e)
+      setShareError('共有を止められませんでした。')
+    }
+  }, [])
 
   return (
     <div className="bg-viewer-bg font-sans flex h-screen flex-col overflow-hidden text-viewer-text">
@@ -305,6 +335,20 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           {!presenter && (
             <button
               type="button"
+              onClick={() => setShareOpen(true)}
+              className={`flex items-center justify-center rounded-lg px-3 py-2 text-white transition-colors ${
+                shareToken ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-800 hover:bg-gray-700'
+              }`}
+            >
+              <Icon name="groups" className="text-xl" />
+              <span className="ml-2 hidden text-sm font-medium sm:inline">
+                {shareToken ? `共有中 (${audience})` : '傾聴者に共有'}
+              </span>
+            </button>
+          )}
+          {!presenter && (
+            <button
+              type="button"
               onClick={() => setQrOpen(true)}
               className="flex items-center justify-center rounded-lg bg-primary-blue px-3 py-2 text-white transition-colors hover:bg-primary-blue/80"
             >
@@ -339,6 +383,17 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           onCancel={closeOverlay}
           onPresenter={presenter ? undefined : startPresenter}
           presenterWindow={presenter}
+        />
+      )}
+      {shareOpen && !presenter && (
+        <ShareDialog
+          token={shareToken}
+          audience={audience}
+          canStart={viewerId !== null}
+          error={shareError}
+          onStart={handleStartShare}
+          onStop={handleStopShare}
+          onClose={closeShare}
         />
       )}
       {qrOpen && !presenter && <QrDialog viewerId={viewerId} username={username} status={status} onClose={closeQr} />}
