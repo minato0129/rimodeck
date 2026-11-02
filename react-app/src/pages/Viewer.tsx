@@ -85,8 +85,6 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   // 発表者モードのウィンドウは、開いたらすぐ「全画面にする」確認を出す
   const [overlayOpen, setOverlayOpen] = useState(presenter)
   const mainRef = useRef<HTMLElement>(null)
-  // スライドと質問の一覧を含む領域(発表者モードの別ウィンドウは、質問も見えるようこちらを全画面にする)
-  const bodyRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const lastRender = useRef<RenderHandle | null>(null)
   // 他の Viewer から受け取ったページに移ったときは、同じページをもう一度知らせない(ループ防止)
@@ -178,10 +176,10 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   )
 
   const startFullscreen = useCallback(() => {
-    const target = presenter ? bodyRef.current : mainRef.current
-    if (target) requestFullscreen(target)
+    // 全画面にするのはスライドだけ(発表者モードの別ウィンドウでも、質問の一覧は映さない)
+    if (mainRef.current) requestFullscreen(mainRef.current)
     setOverlayOpen(false)
-  }, [presenter])
+  }, [])
   const closeOverlay = useCallback(() => setOverlayOpen(false), [])
   const startPresenter = useCallback(() => {
     openPresenterWindow()
@@ -415,7 +413,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
         </div>
       </header>
 
-      <div ref={bodyRef} className="flex flex-1 min-h-0 bg-viewer-bg">
+      <div className="flex flex-1 min-h-0">
         <main
           ref={mainRef}
           className="relative flex min-h-0 w-full flex-col overflow-hidden rounded-lg bg-gray-100 shadow-xl lg:min-h-full"
