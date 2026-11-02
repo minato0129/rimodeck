@@ -1,0 +1,4 @@
+# ビルドの入力に含めない(秘密の設定、アップロードされた PDF、Windows の実行ファイル)
+src/config/*.env
+src/assets
+src/server.exe
