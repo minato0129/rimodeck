@@ -4,11 +4,8 @@
 services:
   postgres-db:
     image: postgres:latest
-    environment:
-      POSTGRES_USER: rimodeck
-      POSTGRES_PASSWORD: rimodeck
-      POSTGRES_DB: rimodeckdb
-      TZ: Asia/Tokyo
+    env_file:
+      - ./env/postgres.env # env/postgres.env.example をコピーして作成(./scripts/setup-env.sh)
     restart: always
     volumes:
       - ./database/db-data:/var/lib/postgresql
@@ -22,7 +19,7 @@ services:
       target: production
     restart: always
     env_file:
-      - ./go-server/src/config/app.env # app.env.example をコピーして作成
+      - ./env/go-server.env # env/go-server.env.example をコピーして作成(./scripts/setup-env.sh)
     depends_on:
       - postgres-db
     volumes:
