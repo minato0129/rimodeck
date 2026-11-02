@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Question } from './questions'
 import { wsUrl } from './ws'
 
 // Viewer が Remote(スマホ)などに知らせる現在の状態(Go 側はこの JSON を文字列のまま中継する)
@@ -14,6 +15,10 @@ type Handlers = {
   onRemoteCommand: (command: string, api: Api) => void
   // 同じ ID の別の Viewer(発表者モードの別ウィンドウなど)からの状態
   onPeerStatus: (status: Partial<ViewerStatus>) => void
+  // 傾聴者共有で、いま見ている人数
+  onAudienceCount?: (count: number) => void
+  // 傾聴者から質問が届いた
+  onQuestion?: (question: Question) => void
 }
 
 type ServerMessage = { type: string; status?: number; data?: string }
@@ -78,6 +83,14 @@ export function useViewerSocket(existingId: string | null, handlers: Handlers, e
           handlersRef.current.onPeerStatus(JSON.parse(message.data ?? '{}'))
         } catch (e) {
           console.error('Failed to parse viewer_status data:', e)
+        }
+      } else if (message.type === 'audience_count' && message.status === 200) {
+        handlersRef.current.onAudienceCount?.(Number(message.data) || 0)
+      } else if (message.type === 'question_new' && message.status === 200) {
+        try {
+          handlersRef.current.onQuestion?.(JSON.parse(message.data ?? '{}'))
+        } catch (e) {
+          console.error('Failed to parse question_new data:', e)
         }
       } else if (message.type === 'error') {
         console.error('WebSocket Error:', message.data)

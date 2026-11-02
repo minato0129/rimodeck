@@ -6,9 +6,14 @@ import Icon from '../components/Icon'
 import NotePanel from '../components/NotePanel'
 import PresentationOverlay from '../components/PresentationOverlay'
 import QrDialog from '../components/QrDialog'
+import QuestionBoard from '../components/QuestionBoard'
+import QuestionPanel from '../components/QuestionPanel'
+import ShareDialog from '../components/ShareDialog'
 import { fileNameOf } from '../lib/api'
 import { requestFullscreen, useFullscreenChange } from '../lib/fullscreen'
 import { useNote } from '../lib/notes'
+import { startShare, stopShare } from '../lib/share'
+import { useQuestions } from '../lib/questions'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
 import { useLogout } from '../lib/useLogout'
@@ -69,6 +74,14 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [page, setPage] = useState(0)
   const [qrOpen, setQrOpen] = useState(false)
+  // 傾聴者共有: token があれば共有中。共有ダイアログを閉じても共有は続く
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareToken, setShareToken] = useState<string | null>(null)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [audience, setAudience] = useState(0)
+  // 傾聴者からの質問(発表者モードの別ウィンドウでは扱わない)
+  const [questionsOpen, setQuestionsOpen] = useState(false)
+  const questions = useQuestions(pdfUrl)
   // 発表者モードのウィンドウは、開いたらすぐ「全画面にする」確認を出す
   const [overlayOpen, setOverlayOpen] = useState(presenter)
   const mainRef = useRef<HTMLElement>(null)
@@ -100,7 +113,8 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   // メモを保存したら、Remote などにも知らせる(sendStatus は、この下の WebSocket のフックが返す)
   const sendRef = useRef<(s: ViewerStatus) => void>(() => {})
   // 知らせるのは、保存したページではなく「いま表示中のページ」(保存を待つ間にページが変わっても、古いページを知らせない)
-  const note = useNote(pdfUrl, page, () => sendRef.current({ page_index: latest.current.page, pdf_path: pdfUrl }))
+  // 発表者モードの別ウィンドウ(傾聴者に見せる画面)には、メモを出さない
+  const note = useNote(pdfUrl, page, () => sendRef.current({ page_index: latest.current.page, pdf_path: pdfUrl }), !presenter)
 
   const syncPage = usePageSync(
     presenter,
@@ -138,6 +152,8 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             console.log('Unknown remote command:', command)
         }
       },
+      onAudienceCount: setAudience,
+      onQuestion: questions.addQuestion,
       onPeerStatus: (peer) => {
         if (peer.page_index !== undefined && peer.page_index !== latest.current.page) {
           skipBroadcastFor.current = peer.page_index
@@ -160,6 +176,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   )
 
   const startFullscreen = useCallback(() => {
+    // 全画面にするのはスライドだけ(発表者モードの別ウィンドウでも、質問の一覧は映さない)
     if (mainRef.current) requestFullscreen(mainRef.current)
     setOverlayOpen(false)
   }, [])
@@ -266,32 +283,79 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   }, [next, prev])
 
   const closeQr = useCallback(() => setQrOpen(false), [])
+  const closeShare = useCallback(() => setShareOpen(false), [])
+  const handleStartShare = useCallback(async () => {
+    if (!viewerId) return
+    setShareError(null)
+    try {
+      setShareToken(await startShare(pdfUrl, viewerId, latest.current.page))
+    } catch (e) {
+      console.error('Failed to start share:', e)
+      setShareError('共有を始められませんでした。')
+    }
+  }, [viewerId, pdfUrl])
+  const handleStopShare = useCallback(async () => {
+    setShareError(null)
+    try {
+      await stopShare()
+      setShareToken(null)
+      setAudience(0)
+    } catch (e) {
+      console.error('Failed to stop share:', e)
+      setShareError('共有を止められませんでした。')
+    }
+  }, [])
+  const { latest: latestQuestion, setPanelOpen } = questions
+  const toast = latestQuestion ? `新しい質問があります (${latestQuestion.page} ページ)` : null
+  const openQuestions = useCallback(() => {
+    setQuestionsOpen(true)
+    setPanelOpen(true)
+  }, [setPanelOpen])
+  const closeQuestions = useCallback(() => {
+    setQuestionsOpen(false)
+    setPanelOpen(false)
+  }, [setPanelOpen])
 
   return (
     <div className="bg-viewer-bg font-sans flex h-screen flex-col overflow-hidden text-viewer-text">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4">
         <div className="flex items-center gap-3">
           <img src="/logos/logo-light.svg" alt="rimodeck" className="h-6" />
-          <span className="text-xs text-gray-500 ml-1">{username}</span>
+          {!presenter && <span className="text-xs text-gray-500 ml-1">{username}</span>}
         </div>
         <div className="flex items-center gap-4">
           <span className="text-base font-medium text-gray-700" aria-live="polite">
             ページ <span>{page}</span> / <span>{total}</span>
           </span>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="text-sm text-gray-500 hover:text-red-500 transition duration-150"
-          >
-            ログアウト
-          </button>
-          <Link
-            to="/"
-            className="flex items-center justify-center rounded-lg bg-gray-500 px-3 py-2 text-white transition-colors hover:bg-gray-700"
-          >
-            <Icon name="folder_open" className="text-xl" />
-            <span className="ml-2 hidden text-sm font-medium sm:inline">ファイル選択に戻る</span>
-          </Link>
+          {/* 発表者モードの別ウィンドウは、傾聴者みんなが見る画面なので、操作のボタンは出さない */}
+          {presenter && (
+            <button
+              type="button"
+              onClick={startFullscreen}
+              className="flex items-center justify-center rounded-lg bg-gray-800 px-3 py-2 text-white transition-colors hover:bg-gray-700"
+            >
+              <Icon name="fullscreen" className="text-xl" />
+              <span className="ml-2 text-sm font-medium">全画面にする</span>
+            </button>
+          )}
+          {!presenter && (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-sm text-gray-500 hover:text-red-500 transition duration-150"
+            >
+              ログアウト
+            </button>
+          )}
+          {!presenter && (
+            <Link
+              to="/"
+              className="flex items-center justify-center rounded-lg bg-gray-500 px-3 py-2 text-white transition-colors hover:bg-gray-700"
+            >
+              <Icon name="folder_open" className="text-xl" />
+              <span className="ml-2 hidden text-sm font-medium sm:inline">ファイル選択に戻る</span>
+            </Link>
+          )}
           {!presenter && (
             <button
               type="button"
@@ -300,6 +364,40 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             >
               <Icon name="slideshow" className="text-xl" />
               <span className="ml-2 hidden text-sm font-medium sm:inline">プレゼンテーション</span>
+            </button>
+          )}
+          {!presenter && (
+            <button
+              type="button"
+              onClick={openQuestions}
+              title="傾聴者からの質問"
+              className="relative flex items-center justify-center rounded-lg bg-gray-800 px-3 py-2 text-white transition-colors hover:bg-gray-700"
+            >
+              <Icon name="forum" className="text-xl" />
+              <span className="ml-2 hidden whitespace-nowrap text-sm font-medium xl:inline">質問</span>
+              {questions.unseen > 0 && (
+                <span
+                  aria-label={`新着の質問 ${questions.unseen} 件`}
+                  className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold"
+                >
+                  {questions.unseen}
+                </span>
+              )}
+            </button>
+          )}
+          {!presenter && (
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              title="傾聴者に共有"
+              className={`flex items-center justify-center rounded-lg px-3 py-2 text-white transition-colors ${
+                shareToken ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-800 hover:bg-gray-700'
+              }`}
+            >
+              <Icon name="groups" className="text-xl" />
+              <span className="ml-2 hidden whitespace-nowrap text-sm font-medium xl:inline">
+                {shareToken ? `共有中 (${audience})` : '傾聴者に共有'}
+              </span>
             </button>
           )}
           {!presenter && (
@@ -330,7 +428,16 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           </div>
         </main>
 
-        <NotePanel text={note.text} loading={note.loading} failed={note.failed} onChange={note.change} />
+        {presenter ? (
+          <QuestionBoard
+            questions={questions.questions}
+            currentPage={page}
+            highlightId={questions.latest?.id ?? null}
+            onGoTo={goTo}
+          />
+        ) : (
+          <NotePanel text={note.text} loading={note.loading} failed={note.failed} onChange={note.change} />
+        )}
       </div>
 
       {overlayOpen && (
@@ -339,6 +446,39 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           onCancel={closeOverlay}
           onPresenter={presenter ? undefined : startPresenter}
           presenterWindow={presenter}
+        />
+      )}
+      {toast && !questionsOpen && !presenter && (
+        <button
+          type="button"
+          role="status"
+          onClick={openQuestions}
+          className="fixed bottom-6 right-6 z-40 rounded-lg bg-gray-900 px-4 py-3 text-sm font-medium text-white shadow-lg"
+        >
+          {toast}
+        </button>
+      )}
+      {questionsOpen && !presenter && (
+        <QuestionPanel
+          questions={questions.questions}
+          currentPage={page}
+          failed={questions.failed}
+          onGoTo={goTo}
+          onToggleAnswered={questions.toggleAnswered}
+          onDelete={questions.remove}
+          onClose={closeQuestions}
+        />
+      )}
+      {shareOpen && !presenter && (
+        <ShareDialog
+          token={shareToken}
+          audience={audience}
+          canStart={viewerId !== null}
+          socketStatus={status}
+          error={shareError}
+          onStart={handleStartShare}
+          onStop={handleStopShare}
+          onClose={closeShare}
         />
       )}
       {qrOpen && !presenter && <QrDialog viewerId={viewerId} username={username} status={status} onClose={closeQr} />}

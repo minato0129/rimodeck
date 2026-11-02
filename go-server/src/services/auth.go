@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"rimodeck/repositories"
@@ -107,10 +108,78 @@ func createToken(userID string, username string) (string, time.Time, error) {
 		return "", time.Time{}, err
 	}
 
+	// 期限の切れたトークンを掃除する(失敗しても、ログイン自体は続ける)
+	if err := repositories.DeleteExpiredTokens(time.Now().Unix()); err != nil {
+		log.Printf("failed to delete expired tokens: %v", err)
+	}
+
 	// トークンをデータベースに保存
 	if err := repositories.RegisterToken(tokenString, userID, expirationTime.Unix()); err != nil {
 		return "", time.Time{}, err
 	}
 
 	return tokenString, expirationTime, nil
+}
+
+// トークンが正しくない(改ざん・期限切れ・未登録など)ときのエラー
+var ErrInvalidToken = errors.New("invalid token")
+
+// トークンの署名と有効期限を確かめ、ユーザーID を取り出す(DB は見ない)
+func parseToken(tokenString string) (string, error) {
+	if tokenString == "" {
+		return "", ErrInvalidToken
+	}
+
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		// 署名の方式は HS256 だけを受け付ける(alg を差し替えた偽造を防ぐ)
+		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return []byte(os.Getenv("SECRET_KEY")), nil
+	})
+	if err != nil || !token.Valid {
+		return "", ErrInvalidToken
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", ErrInvalidToken
+	}
+	// 有効期限(exp)のないトークンは受け付けない
+	if !claims.VerifyExpiresAt(time.Now().Unix(), true) {
+		return "", ErrInvalidToken
+	}
+	userID, ok := claims["user_id"].(string)
+	if !ok || userID == "" {
+		return "", ErrInvalidToken
+	}
+	return userID, nil
+}
+
+// トークンを検証して、ログイン中のユーザーを返す。
+// 署名・有効期限が正しく、かつ発行時に DB へ登録されたトークンだけを受け付ける。
+func AuthenticateToken(tokenString string) (models.Users, error) {
+	userID, err := parseToken(tokenString)
+	if err != nil {
+		return models.Users{}, err
+	}
+
+	registered, err := repositories.TokenExists(tokenString)
+	if err != nil {
+		return models.Users{}, err
+	}
+	if !registered {
+		return models.Users{}, ErrInvalidToken
+	}
+
+	user, err := repositories.GetUserByID(userID)
+	if err != nil {
+		return models.Users{}, ErrInvalidToken
+	}
+	return user, nil
+}
+
+// トークンを失効させる(ログアウト)。以降、このトークンは AuthenticateToken を通らない。
+func RevokeToken(tokenString string) error {
+	return repositories.DeleteToken(tokenString)
 }

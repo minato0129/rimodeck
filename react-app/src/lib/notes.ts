@@ -1,20 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, authHeaders } from './api'
+import { ApiError, apiFetch } from './api'
 
 async function fetchNote(pdfPath: string, page: number, signal: AbortSignal): Promise<string> {
-  const response = await fetch(`/note?pdf_path=${encodeURIComponent(pdfPath)}&page_index=${page}`, {
-    headers: authHeaders(),
-    signal,
-  })
+  const response = await apiFetch(`/note?pdf_path=${encodeURIComponent(pdfPath)}&page_index=${page}`, { signal })
   if (!response.ok) throw new ApiError(response.status, `HTTP error! status: ${response.status}`)
   const data = await response.json()
   return data.content || ''
 }
 
 async function saveNoteRequest(pdfPath: string, page: number, content: string): Promise<void> {
-  const response = await fetch('/note', {
+  const response = await apiFetch('/note', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pdf_path: pdfPath, page_index: page, content }),
   })
   if (!response.ok) throw new ApiError(response.status, `HTTP error! status: ${response.status}`)
@@ -29,7 +26,7 @@ const SAVE_DELAY_MS = 1000
 // - 入力が1秒止まったら保存する(保存できたら onSaved を呼ぶ)
 // - 保存を待たずにページが変わっても、入力したページに保存する
 //   (現行版は、保存の瞬間のページ番号を使うため、その間にページが変わると入力が失われていた)
-export function useNote(pdfPath: string, page: number, onSaved: () => void) {
+export function useNote(pdfPath: string, page: number, onSaved: () => void, enabled = true) {
   const key = `${pdfPath}#${page}`
   const [loaded, setLoaded] = useState<{ key: string; text: string } | null>(null)
   const [failedKey, setFailedKey] = useState<string | null>(null)
@@ -57,7 +54,7 @@ export function useNote(pdfPath: string, page: number, onSaved: () => void) {
   // 読み込み。ページが変わる・閉じるときは、先に未保存の入力を保存する。
   // 読み込みは直前の保存が終わってから行う(古い内容で上書きされないように)。
   useEffect(() => {
-    if (page < 1) return
+    if (page < 1 || !enabled) return
     const controller = new AbortController()
     saving.current
       .then(() => fetchNote(pdfPath, page, controller.signal))
@@ -71,7 +68,7 @@ export function useNote(pdfPath: string, page: number, onSaved: () => void) {
       controller.abort() // 前のページの応答が遅れて届いても、反映しない
       flush()
     }
-  }, [pdfPath, page, key, reloadTick, flush])
+  }, [pdfPath, page, key, reloadTick, flush, enabled])
 
   const change = useCallback(
     (value: string) => {

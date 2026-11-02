@@ -184,6 +184,13 @@ func hello(c echo.Context) error {
 				}
 			}
 		} else if receivedMsg.Type == "viewer_update" {
+			// 共有中なら、傾聴者にもページを知らせる
+			var viewerState struct {
+				PageIndex int `json:"page_index"`
+			}
+			if json.Unmarshal([]byte(receivedMsg.Data), &viewerState) == nil {
+				updateSharePage(uid, viewerState.PageIndex)
+			}
 			// Viewer自身の状態更新を、登録されているすべてのRemoteにブロードキャスト
 			mu.RLock()
 			if remotes, ok := remoteMap[uid]; ok {
@@ -209,23 +216,8 @@ func hello(c echo.Context) error {
 
 // ユーザーのSlidepass（UUIDフォルダ名）を取得するヘルパー
 func getUserSlidepass(c echo.Context) (string, error) {
-	// まずクッキーからユーザー名を取得
-	cookie, err := c.Cookie("username")
-	username := ""
-	if err == nil {
-		username = cookie.Value
-	}
-
-	// クッキーにない場合はヘッダーから取得 (後方互換性のため)
-	if username == "" {
-		username = c.Request().Header.Get("X-Username")
-	}
-
-	if username == "" {
-		return "", fmt.Errorf("user not identified")
-	}
-
-	user, err := repositories.GetUserByName(username)
+	// ログイン中のユーザーを確かめる(Cookie の token を検証)
+	user, err := controllers.Authenticate(c)
 	if err != nil {
 		return "", err
 	}
@@ -320,10 +312,11 @@ func getPdfList(c echo.Context) error {
 
 // PDFファイルを削除するハンドラ
 func deletePdfHandler(c echo.Context) error {
-	slideFolder, err := getUserSlidepass(c)
+	user, err := controllers.Authenticate(c)
 	if err != nil {
 		return c.String(http.StatusUnauthorized, "Unauthorized")
 	}
+	slideFolder := user.Slidepass
 
     // クライアントから送信されるJSONの構造
     type DeleteRequest struct {
@@ -356,6 +349,11 @@ func deletePdfHandler(c echo.Context) error {
     if err := os.Remove(fullPath); err != nil {
         log.Printf("Failed to delete file %s: %v", fullPath, err)
         return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("ファイルの削除に失敗しました: %v", err)})
+    }
+
+    // この PDF への質問も消す(失敗しても、ファイルは削除済みなので続行)
+    if err := repositories.DeleteQuestionsByPdf(user.UserID, fileName); err != nil {
+        log.Printf("Failed to delete questions for %s: %v", fileName, err)
     }
 
     log.Printf("Successfully deleted file: %s", fullPath)
@@ -397,12 +395,14 @@ func web_main() {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		path := c.Param("*")
-		if !strings.HasSuffix(strings.ToLower(path), ".pdf") {
-			return c.String(http.StatusForbidden, "Only PDF files are accessible")
+		// c.Param("*") は、URL に ( ) などが含まれると %エンコードされたままになり
+		// ファイルが見つからず 404 になるため、デコード済みの URL.Path から取り出す
+		fullPath, status, msg := resolveAssetPath(c.Request().URL.Path, slideFolder)
+		if status != http.StatusOK {
+			return c.String(status, msg)
 		}
 		// ユーザー専用フォルダ内のファイルを取得
-		return c.File(filepath.Join("assets", "Slidepass", slideFolder, path))
+		return c.File(fullPath)
 	})
 	
 	//PDF一覧を取得するための新しいエンドポイント
@@ -423,5 +423,34 @@ func web_main() {
     e.Match([]string{http.MethodGet, http.MethodPost}, "/note", controllers.HandleNote)
 
 	e.GET("/ws", hello)
+
+	// 傾聴者共有 (共有の開始・停止はログイン必須、傾聴者の閲覧はログイン不要)
+	e.POST("/share", startShareHandler)
+	e.POST("/share/stop", stopShareHandler)
+	e.GET("/shared/:token/pdf", sharedPdfHandler)
+	e.GET("/ws/watch", watchWsHandler)
+
+	// 傾聴者からの質問 (送信はログイン不要・共有トークンが鍵、閲覧と管理はログイン必須)
+	e.POST("/shared/:token/question", sharedQuestionHandler)
+	e.GET("/questions", listQuestionsHandler)
+	e.POST("/question/answered", answerQuestionHandler)
+	e.POST("/question/delete", deleteQuestionHandler)
 	e.Logger.Fatal(e.Start("0.0.0.0:1323"))
+}
+
+// resolveAssetPath は /assets/ 以下のリクエストパス (デコード済み) を、
+// ユーザー専用フォルダ内の実ファイルパスに変換します。
+// 失敗した場合は HTTP ステータスとメッセージを返します。
+func resolveAssetPath(urlPath, slideFolder string) (string, int, string) {
+	name := strings.TrimPrefix(urlPath, "/assets/")
+	if !strings.HasSuffix(strings.ToLower(name), ".pdf") {
+		return "", http.StatusForbidden, "Only PDF files are accessible"
+	}
+	// パストラバーサル対策: ユーザー専用フォルダの外に出るパスは拒否
+	for _, part := range strings.Split(filepath.ToSlash(name), "/") {
+		if part == ".." {
+			return "", http.StatusForbidden, "Invalid path"
+		}
+	}
+	return filepath.Join("assets", "Slidepass", slideFolder, name), http.StatusOK, ""
 }

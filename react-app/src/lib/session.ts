@@ -1,4 +1,4 @@
-// ログイン中のユーザー名(表示と API ヘッダー用)。保存先は現行版と同じ localStorage。
+// ログイン中のユーザー名(画面に表示するためだけに保存する。本人確認には使わない)。保存先は現行版と同じ localStorage。
 // プライベートウィンドウなどでは localStorage が使えないことがあるので、すべて try/catch で包む。
 const KEY = 'username'
 

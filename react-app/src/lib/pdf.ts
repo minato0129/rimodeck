@@ -5,7 +5,6 @@ import {
   type RenderTask,
 } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
-import { authHeaders } from './api'
 
 // 最新版の pdf.js は比較的新しいブラウザの機能(Map.prototype.getOrInsertComputed など)を使うため、
 // 古いブラウザでもサムネイルが描画されるよう、互換処理の入った legacy ビルドを使う。
@@ -28,7 +27,7 @@ export async function renderThumbnail(
   canvas.width = width
   canvas.height = height
 
-  const loadingTask = getDocument({ url: pdfUrl, httpHeaders: authHeaders() })
+  const loadingTask = getDocument({ url: pdfUrl })
   signal.addEventListener('abort', () => void loadingTask.destroy())
 
   try {
@@ -57,9 +56,12 @@ export type PdfDoc = PDFDocumentProxy
 
 // PDF を開く。destroy() で読み込みを中断・破棄できる。
 export function openPdf(url: string): { promise: Promise<PdfDoc>; destroy: () => void } {
-  const task = getDocument({ url, httpHeaders: authHeaders() })
+  const task = getDocument({ url })
   return { promise: task.promise, destroy: () => void task.destroy() }
 }
+
+// 描画の解像度の上限(メモリを使いすぎないように)
+const MAX_PIXEL_RATIO = 3
 
 export type RenderHandle = { cancel: () => void; finished: Promise<void> }
 
@@ -85,11 +87,16 @@ export function renderFitted(
       // 画面が横長なら高さに、縦長なら幅に合わせる
       const scale =
         box.width / box.height > base.width / base.height ? box.height / base.height : box.width / base.width
-      const viewport = page.getViewport({ scale })
+      // 高解像度の画面(スマホなど)でぼやけないよう、画面の画素密度の分だけ大きく描いて、表示の大きさは変えない
+      const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), MAX_PIXEL_RATIO)
+      const cssViewport = page.getViewport({ scale })
+      const viewport = page.getViewport({ scale: scale * dpr })
       const ctx = canvas.getContext('2d')
       if (!ctx) return
       canvas.width = viewport.width
       canvas.height = viewport.height
+      canvas.style.width = `${cssViewport.width}px`
+      canvas.style.height = `${cssViewport.height}px`
       task = page.render({ canvas, canvasContext: ctx, viewport })
       await task.promise
     } catch (error) {
