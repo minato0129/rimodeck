@@ -5,8 +5,7 @@ name: main
 
 on:
   push:
-    # TODO: feature/production-build は検証用の一時的な指定。検証が終わったら外す
-    branches: [main, feature/production-build]
+    branches: [main]
   workflow_dispatch:
 
 # 同じブランチで二重に動かさない(公開の途中で止めないよう、実行中のものは中断しない)
