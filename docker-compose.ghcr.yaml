@@ -1,0 +1,44 @@
+# GitHub Actions が GHCR に公開したイメージを pull して、ローカルで動かす構成(ビルドはしない)。
+# 起動:
+#   mkdir -p go-server/src/config && cp app.env.example go-server/src/config/app.env   # 初回のみ(SECRET_KEY を設定)
+#   docker compose -f docker-compose.ghcr.yaml pull
+#   docker compose -f docker-compose.ghcr.yaml up -d
+# イメージのタグは RIMODECK_TAG で変えられる(未指定は latest)。例: RIMODECK_TAG=26a96ef docker compose -f docker-compose.ghcr.yaml up -d
+# 開発用の docker-compose.yaml や、ビルドして動かす docker-compose.production.yaml とは同時に起動しない(80 番を nginx が使う)。
+services:
+  postgres-db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: rimodeck
+      POSTGRES_PASSWORD: rimodeck
+      POSTGRES_DB: rimodeckdb
+      TZ: Asia/Tokyo
+    restart: always
+    volumes:
+      - ./database/db-data:/var/lib/postgresql
+
+  # Go サーバー(API・WebSocket・PDF)。外には公開せず、nginx からだけ呼ぶ
+  go-server:
+    hostname: go-server
+    image: ghcr.io/minato0129/rimodeck/go-server:${RIMODECK_TAG:-latest}
+    pull_policy: always
+    restart: always
+    env_file:
+      - ./go-server/src/config/app.env # app.env.example をコピーして作成
+    depends_on:
+      - postgres-db
+    volumes:
+      - prod-assets:/assets # アップロードした PDF の保存先(Go は WORKDIR の / から assets/Slidepass/... に保存する)
+
+  # nginx: React のビルド結果を配信し、API を go-server へ中継する
+  web:
+    image: ghcr.io/minato0129/rimodeck/web:${RIMODECK_TAG:-latest}
+    pull_policy: always
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - go-server
+
+volumes:
+  prod-assets:

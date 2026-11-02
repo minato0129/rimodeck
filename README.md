@@ -98,8 +98,24 @@ docker compose -f docker-compose.production.yaml up -d --build
 <http://localhost/>(80番ポート)で開きます。スマホで QR を読み取るときは、上の「スマホで QR コードを読み取るとき」のとおり、LAN の IP(`http://192.168.x.x/`)で開いてください。
 
 - 開発用の `docker-compose.yaml` とは別のファイルで、同時には起動しません。
-- Go サーバーは外に公開せず、nginx からだけ呼びます。起動は `go run .` です(ソースをコンテナにマウントして、起動時にコンパイルします)。
+- Go サーバーは外に公開せず、nginx からだけ呼びます。イメージの中でビルドした実行ファイルを動かします(`go run .` は不要です)。アップロードした PDF は、名前付きボリューム `prod-assets` に入ります。
 - HTTP のみです。インターネットに公開する場合は、HTTPS(証明書)の設定を別途追加してください。
+
+#### ビルド済みイメージ(GHCR)で動かす
+
+`main` に push されると、GitHub Actions が本番用イメージ(`go-server` と `web`)をビルドして GHCR に公開します(`ghcr.io/minato0129/rimodeck/go-server` と `.../web`。タグは `latest` とコミットの短い ID)。公開されたイメージは、ビルドせずに pull して動かせます。
+
+```bash
+mkdir -p go-server/src/config
+cp app.env.example go-server/src/config/app.env   # 初回のみ(SECRET_KEY を設定する)
+docker compose -f docker-compose.ghcr.yaml pull
+docker compose -f docker-compose.ghcr.yaml up -d
+```
+
+- 使い方と注意は、上の「本番での配信(nginx)」と同じです(<http://localhost/>、スマホは LAN の IP で開く)。
+- タグを固定するときは `RIMODECK_TAG=<コミットの短いID> docker compose -f docker-compose.ghcr.yaml up -d` のように指定します。
+- pull できない(`unauthorized` になる)ときは、GHCR のパッケージが非公開です。GitHub のパッケージの設定で公開にするか、`docker login ghcr.io`(`read:packages` 権限のトークン)でログインしてください。
+- 開発用・ビルドして動かす compose とは、同時には起動しません(80 番ポートが重なります)。
 
 ### API の接続
 
