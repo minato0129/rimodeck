@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # 各フォルダーの config/*.env.example から、まだ無い config/*.env を作る。
 #   database/config/postgres.env
-#   go-server/src/config/go-server.env
-#   react-app/config/react-app.env
+#   go-server/src/config/app.env
+#   react-app/config/react.env
 # - すでにある *.env は上書きしない
-# - go-server.env の SECRET_KEY が空なら、ランダムな鍵(64文字)を作って書き込む
+# - app.env の SECRET_KEY が空なら、ランダムな鍵(64文字)を作って書き込む
 # 使い方: ./scripts/setup-env.sh
 set -euo pipefail
 
@@ -12,8 +12,8 @@ cd "$(dirname "$0")/.."
 
 for example in \
   database/config/postgres.env.example \
-  go-server/src/config/go-server.env.example \
-  react-app/config/react-app.env.example; do
+  go-server/src/config/app.env.example \
+  react-app/config/react.env.example; do
   target="${example%.example}"
   if [ -e "$target" ]; then
     echo "skip   $target (すでにあります)"
@@ -23,7 +23,7 @@ for example in \
   fi
 done
 
-go_env="go-server/src/config/go-server.env"
+go_env="go-server/src/config/app.env"
 if grep -qE '^SECRET_KEY=$' "$go_env"; then
   if command -v openssl >/dev/null 2>&1; then
     key="$(openssl rand -hex 32)"

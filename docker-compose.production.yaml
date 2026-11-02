@@ -19,7 +19,7 @@ services:
       target: production
     restart: always
     env_file:
-      - ./go-server/src/config/go-server.env # go-server.env.example をコピーして作成(./scripts/setup-env.sh)
+      - ./go-server/src/config/app.env # app.env.example をコピーして作成(./scripts/setup-env.sh)
     depends_on:
       - postgres-db
     volumes:

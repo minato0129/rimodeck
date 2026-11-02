@@ -14,10 +14,10 @@ var (
 )
 
 func Init() {
-	// 接続先は環境変数 DB_URL で指定する(go-server/src/config/go-server.env、README参照)
+	// 接続先は環境変数 DB_URL で指定する(go-server/src/config/app.env、README参照)
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
-		log.Fatal("DB_URL が設定されていません。go-server/src/config/go-server.env を作成し(./scripts/setup-env.sh)、docker compose で go-server を作り直してください(README参照)")
+		log.Fatal("DB_URL が設定されていません。go-server/src/config/app.env を作成し(./scripts/setup-env.sh)、docker compose で go-server を作り直してください(README参照)")
 	}
 
 	// データベースを開く

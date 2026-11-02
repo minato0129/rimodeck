@@ -20,7 +20,7 @@ services:
     image: go-server:latest
     restart: always
     env_file:
-      - ./go-server/src/config/go-server.env # go-server.env.example をコピーして作成(./scripts/setup-env.sh)
+      - ./go-server/src/config/app.env # app.env.example をコピーして作成(./scripts/setup-env.sh)
     depends_on:
       - postgres-db
     tty: true
@@ -39,7 +39,7 @@ services:
     container_name: react-app
     restart: always
     env_file:
-      - ./react-app/config/react-app.env # react-app.env.example をコピーして作成(./scripts/setup-env.sh)
+      - ./react-app/config/react.env # react.env.example をコピーして作成(./scripts/setup-env.sh)
     ports:
       - "3000:3000"
     volumes:

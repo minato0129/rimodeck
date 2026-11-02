@@ -82,7 +82,7 @@ const minSecretKeyLength = 32
 func RequireSecretKey() {
 	key := os.Getenv("SECRET_KEY")
 	if len(key) < minSecretKeyLength {
-		log.Fatalf("SECRET_KEY が未設定か短すぎます(%d 文字以上)。`openssl rand -hex 32` などで作った値を go-server/src/config/go-server.env に書いてください(./scripts/setup-env.sh で自動で作れます。README参照)", minSecretKeyLength)
+		log.Fatalf("SECRET_KEY が未設定か短すぎます(%d 文字以上)。`openssl rand -hex 32` などで作った値を go-server/src/config/app.env に書いてください(./scripts/setup-env.sh で自動で作れます。README参照)", minSecretKeyLength)
 	}
 }
 
