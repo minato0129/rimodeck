@@ -19,17 +19,14 @@ services:
     build:
       context: ./go-server
       dockerfile: ./dockerfile
-      target: develop
-    image: go-server:latest
-    # dockerfile の CMD は sleep infinity(開発用)なので、ここでサーバーを起動する
-    command: ["go", "run", "."]
+      target: production
     restart: always
     env_file:
       - ./go-server/src/config/app.env # app.env.example をコピーして作成
     depends_on:
       - postgres-db
     volumes:
-      - ./go-server/src:/app/src
+      - prod-assets:/assets # PDF 生成用のフォントなどを共有するためのボリューム
 
   # nginx: React のビルド結果を配信し、API を go-server へ中継する
   web:
@@ -42,3 +39,6 @@ services:
       - "80:80"
     depends_on:
       - go-server
+
+volumes:
+  prod-assets:
