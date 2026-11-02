@@ -1,0 +1,65 @@
+# main に push されたとき、本番用 Docker イメージ(go-server と web(nginx))をビルドして GHCR に公開する。
+# Go のビルドと React のビルドは、それぞれ Dockerfile の中(build ステージ)で行われる。
+# 手動でも実行できる(Actions タブの "Run workflow")。
+name: main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 同じブランチで二重に動かさない(公開の途中で止めないよう、実行中のものは中断しない)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # 本番用イメージをビルドして GHCR に公開する
+  images:
+    name: Image (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: go-server
+            context: ./go-server
+          - name: web
+            context: ./react-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # イメージ名: ghcr.io/<owner>/<repo>/<go-server|web>、タグ: latest と、コミットの短い ID
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.name }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/dockerfile
+          target: production
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

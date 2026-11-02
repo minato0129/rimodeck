@@ -11,3 +11,18 @@ COPY src/go.mod src/go.sum ./
 RUN go mod download
 
 CMD ["sleep", "infinity"]
+
+# ビルド用の環境を作成
+FROM golang:1.25.3-bookworm AS build
+
+WORKDIR /go/src/app
+COPY ./src .
+
+RUN go mod download
+RUN CGO_ENABLED=0 go build -o /go/bin/app
+
+# 本番用のイメージを作成
+FROM gcr.io/distroless/static-debian13 as production
+WORKDIR /
+COPY --from=build /go/bin/app /
+CMD ["/app"]
