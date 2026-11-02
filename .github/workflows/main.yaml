@@ -1,0 +1,112 @@
+# main に push されたとき:
+#   1. Go と React をチェックする(ビルド・テスト・lint)
+#   2. 本番用 Docker イメージ(go-server と web(nginx))をビルドして GHCR に公開する
+# 手動でも実行できる(Actions タブの "Run workflow")。
+name: main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 同じブランチで二重に動かさない(公開の途中で止めないよう、実行中のものは中断しない)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go (build, test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: go-server/src
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go-server/src/go.mod
+          cache-dependency-path: go-server/src/go.sum
+
+      - name: Build
+        run: go build ./...
+
+      # DB や SECRET_KEY が無くても動くテストだけ(DB は使わない)
+      - name: Test
+        run: go test ./...
+
+  react:
+    name: React (lint, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: react-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: react-app/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # tsc の型検査と vite build
+      - name: Build
+        run: npm run build
+
+  # 本番用イメージをビルドして GHCR に公開する(go と react が通ったときだけ)
+  images:
+    name: Image (${{ matrix.name }})
+    needs: [go, react]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: go-server
+            context: ./go-server
+          - name: web
+            context: ./react-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # イメージ名: ghcr.io/<owner>/<repo>/<go-server|web>、タグ: latest と、コミットの短い ID
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.name }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/dockerfile
+          target: production
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
