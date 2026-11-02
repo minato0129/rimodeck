@@ -1,6 +1,5 @@
-# main に push されたとき:
-#   1. Go と React をチェックする(ビルド・テスト・lint)
-#   2. 本番用 Docker イメージ(go-server と web(nginx))をビルドして GHCR に公開する
+# main に push されたとき、本番用 Docker イメージ(go-server と web(nginx))をビルドして GHCR に公開する。
+# Go のビルドと React のビルドは、それぞれ Dockerfile の中(build ステージ)で行われる。
 # 手動でも実行できる(Actions タブの "Run workflow")。
 name: main
 
@@ -18,55 +17,9 @@ permissions:
   contents: read
 
 jobs:
-  go:
-    name: Go (build, test)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: go-server/src
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go-server/src/go.mod
-          cache-dependency-path: go-server/src/go.sum
-
-      - name: Build
-        run: go build ./...
-
-      # DB や SECRET_KEY が無くても動くテストだけ(DB は使わない)
-      - name: Test
-        run: go test ./...
-
-  react:
-    name: React (lint, build)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: react-app
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: react-app/package-lock.json
-
-      - run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      # tsc の型検査と vite build
-      - name: Build
-        run: npm run build
-
-  # 本番用イメージをビルドして GHCR に公開する(go と react が通ったときだけ)
+  # 本番用イメージをビルドして GHCR に公開する
   images:
     name: Image (${{ matrix.name }})
-    needs: [go, react]
     runs-on: ubuntu-latest
     permissions:
       contents: read
