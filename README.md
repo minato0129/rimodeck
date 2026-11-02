@@ -15,22 +15,40 @@ DBのテーブル(`Users`, `Note`)は、サーバー起動時に `AutoMigrate` �
 
 ## 起動方法
 
-どちらの方法でも、最初に設定ファイルを作ります。
+どちらの方法でも、最初に設定ファイルを作ります。設定は**コンテナごとに**、それぞれのフォルダーの `config/` に分かれています。
+
+| ファイル | 使うコンテナ | 主な中身 |
+| --- | --- | --- |
+| `database/config/postgres.env` | `postgres-db` | DB のユーザー名・パスワード・DB名 |
+| `go-server/src/config/go-server.env` | `go-server` | `DB_URL`、`SECRET_KEY` など |
+| `react-app/config/react-app.env` | `react-app`(開発用) | `VITE_API_TARGET` |
 
 ```bash
-mkdir -p go-server/src/config
-cp app.env.example go-server/src/config/app.env
+./scripts/setup-env.sh
 ```
 
-`go-server/src/config/` は `.gitignore` 対象です。コミットされません。
+各 `config/*.env.example` から、まだ無い `*.env` を作ります(すでにあるファイルは上書きしません)。さらに、`go-server.env` の `SECRET_KEY` が空なら、ランダムな鍵を作って自動で書き込みます。`config/*.env` は `.gitignore` 対象で、コミットされません(`*.env.example` はコミットされます)。
 
-作った `app.env` の `SECRET_KEY=` に、ログインのトークンに署名する秘密の鍵を書きます。**空や32文字未満だと、サーバーは起動しません。**
+- `postgres.env` と `go-server.env` の `DB_URL` は、DB のユーザー名・パスワード・DB名を**同じ値にそろえて**ください(初期値はそろっています)。
+- Postgres の設定が反映されるのは、データベースを最初に作るときだけです。すでに `database/db-data` がある場合、あとから変えても効きません。
+- 本番の `web`(nginx)コンテナには、設定する値はありません。
+- `go-server/.dockerignore` と `react-app/.dockerignore` で、`config/*.env` はイメージのビルドの入力に含めないようにしています。
+
+#### SECRET_KEY(ログインのトークンの署名鍵)
+
+**空や32文字未満だと、サーバーは起動しません。** `./scripts/setup-env.sh` が自動で作りますが、自分で作る場合は、次のどれかで作った文字列を `go-server/src/config/go-server.env` の `SECRET_KEY=` の右に貼ります。
 
 ```bash
-openssl rand -hex 32   # 出力された文字列を SECRET_KEY= の右に貼る
+openssl rand -hex 32                                              # macOS / Linux / Git Bash / WSL
+python3 -c "import secrets; print(secrets.token_hex(32))"         # Python がある場合
 ```
 
-この値は人に見せないでください(漏れると、他人がログイン済みのふりをできてしまいます)。変えると、ログイン済みの人はログインし直しになります。
+```powershell
+# Windows の PowerShell 7 以降
+[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+```
+
+この値は人に見せないでください(Git に入れない・チャットに貼らない)。漏れると、他人がログイン済みのふりをできてしまいます。作り直すと、ログイン済みの人はログインし直しになります(コンテナを作り直すか再起動して反映します)。
 
 ### A. Docker Compose で全部起動する
 
@@ -38,7 +56,7 @@ openssl rand -hex 32   # 出力された文字列を SECRET_KEY= の右に貼る
 docker compose up --build
 ```
 
-`go-server` コンテナは `go-server/src/config/app.env` を読み込み、`postgres-db` の起動後に立ち上がります。ただし起動するだけ(`sleep infinity`)で、Go のサーバーは動きません。VS Code などでコンテナにアタッチして、`/app/src` で `go run .` を実行してください(コード変更後は、実行中の `go run .` を `Ctrl+C` で止めてからもう一度実行します)。
+`go-server` コンテナは `go-server/src/config/go-server.env` を、`postgres-db` コンテナは `database/config/postgres.env` を読み込み、`postgres-db` の起動後に立ち上がります。ただし起動するだけ(`sleep infinity`)で、Go のサーバーは動きません。VS Code などでコンテナにアタッチして、`/app/src` で `go run .` を実行してください(コード変更後は、実行中の `go run .` を `Ctrl+C` で止めてからもう一度実行します)。
 React(<http://localhost:3000/>)も同時に起動します。
 
 ### B. DBだけ Docker、サーバーはローカルで動かす
@@ -48,13 +66,13 @@ docker compose up -d postgres-db
 
 cd go-server/src
 set -a
-source config/app.env
+source config/go-server.env
 set +a
 export DB_URL='postgres://rimodeck:rimodeck@localhost:5432/rimodeckdb?sslmode=disable'
 go run .
 ```
 
-`app.env` の `DB_URL` はコンテナ内用(ホスト名 `postgres-db`)なので、ローカル実行では上のように `localhost` へ上書きします。
+`go-server.env` の `DB_URL` はコンテナ内用(ホスト名 `postgres-db`)なので、ローカル実行では上のように `localhost` へ上書きします。
 
 ## フロントエンド(React)
 
@@ -90,8 +108,7 @@ Go サーバーは `http://localhost:1323` にある前提です。別の場所�
 本番は、ビルドした React を nginx で配信します。`/login`・`/signup` の POST と `/logout` `/upload` `/pdfs` `/delete-pdf` `/note` `/assets/` `/ws` は nginx が Go サーバーに中継するので、画面と API が同じオリジンになり、Cookie や CORS の設定は要りません(振り分けは `react-app/nginx.conf`)。
 
 ```bash
-mkdir -p go-server/src/config
-cp app.env.example go-server/src/config/app.env   # 初回のみ
+./scripts/setup-env.sh   # 初回のみ(config/*.env を作り、SECRET_KEY を自動で作る)
 docker compose -f docker-compose.production.yaml up -d --build
 ```
 
@@ -183,7 +200,8 @@ Go サーバー(<http://localhost:1323/>)が提供するのは次のものです
 | --- | --- |
 | `DB_URL` | 必須。GORM が使う PostgreSQL の接続文字列 |
 | `SECRET_KEY` | 必須(32文字以上)。ログインのアクセストークン(JWT)の署名鍵 |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `app.env` 内で `DB_URL` を組み立てるための値 |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `database/config/postgres.env`。Postgres コンテナが、最初にデータベースを作るときに使う(`DB_URL` と同じ値にそろえる) |
+| `VITE_API_TARGET` | `react-app/config/react-app.env`。開発用の Vite サーバーが API を中継する先 |
 | `GO_URL` | 現在のエントリポイント(`web_main`)では使われません。待ち受けは `0.0.0.0:1323` に固定されています |
 
 ## ブランチ
