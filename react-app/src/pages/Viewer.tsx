@@ -389,14 +389,14 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             <button
               type="button"
               onClick={() => setShareOpen(true)}
-              title="傾聴者に共有"
+              title="資料を共有"
               className={`flex items-center justify-center rounded-lg px-3 py-2 text-white transition-colors ${
                 shareToken ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-800 hover:bg-gray-700'
               }`}
             >
               <Icon name="groups" className="text-xl" />
               <span className="ml-2 hidden whitespace-nowrap text-sm font-medium xl:inline">
-                {shareToken ? `共有中 (${audience})` : '傾聴者に共有'}
+                {shareToken ? `共有中 (${audience})` : '資料を共有'}
               </span>
             </button>
           )}
