@@ -58,7 +58,7 @@ export default function ShareDialog({ token, audience, canStart, socketStatus, e
         </button>
         <div className="flex flex-col items-center gap-5 text-center">
           <h2 id="share-title" className="text-2xl font-bold text-viewer-text">
-            傾聴者に共有
+            資料を共有
           </h2>
 
           {url ? (
