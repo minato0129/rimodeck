@@ -15,9 +15,9 @@ type Handlers = {
   onRemoteCommand: (command: string, api: Api) => void
   // 同じ ID の別の Viewer(発表者モードの別ウィンドウなど)からの状態
   onPeerStatus: (status: Partial<ViewerStatus>) => void
-  // 傾聴者共有で、いま見ている人数
+  // 聞き手への共有で、いま見ている人数
   onAudienceCount?: (count: number) => void
-  // 傾聴者から質問が届いた
+  // 聞き手から質問が届いた
   onQuestion?: (question: Question) => void
 }
 

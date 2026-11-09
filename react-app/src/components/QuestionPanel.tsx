@@ -14,7 +14,7 @@ type Props = {
 
 type Tab = 'page' | 'all'
 
-// 発表者が、傾聴者からの質問を見る右側のパネル(いまのページの質問/すべて)
+// 発表者が、聞き手からの質問を見る右側のパネル(いまのページの質問/すべて)
 export default function QuestionPanel({ questions, currentPage, failed, onGoTo, onToggleAnswered, onDelete, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('page')
   const [confirmId, setConfirmId] = useState<number | null>(null)
@@ -33,12 +33,12 @@ export default function QuestionPanel({ questions, currentPage, failed, onGoTo, 
 
   return (
     <aside
-      aria-label="傾聴者からの質問"
+      aria-label="聞き手からの質問"
       className="fixed inset-y-0 right-0 z-40 flex w-full max-w-sm flex-col border-l border-gray-200 bg-white shadow-xl"
     >
       <div className="flex items-center justify-between border-b border-gray-200 p-4">
         <div>
-          <h2 className="text-lg font-bold">傾聴者からの質問</h2>
+          <h2 className="text-lg font-bold">聞き手からの質問</h2>
           <p className="text-xs text-gray-500">
             全 {questions.length} 件 / 未回答 {unanswered} 件
           </p>

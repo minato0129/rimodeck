@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// 傾聴者から発表者への質問。発表者が削除するまで残る(PDF ごとに保存)。
+// 聞き手から発表者への質問。発表者が削除するまで残る(PDF ごとに保存)。
 type Question struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	UserID    string    `gorm:"type:varchar(255);not null;index:idx_question_user_pdf" json:"-"` // 発表者のユーザーID

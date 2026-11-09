@@ -74,12 +74,12 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [page, setPage] = useState(0)
   const [qrOpen, setQrOpen] = useState(false)
-  // 傾聴者共有: token があれば共有中。共有ダイアログを閉じても共有は続く
+  // 聞き手への共有: token があれば共有中。共有ダイアログを閉じても共有は続く
   const [shareOpen, setShareOpen] = useState(false)
   const [shareToken, setShareToken] = useState<string | null>(null)
   const [shareError, setShareError] = useState<string | null>(null)
   const [audience, setAudience] = useState(0)
-  // 傾聴者からの質問(発表者モードの別ウィンドウでは扱わない)
+  // 聞き手からの質問(発表者モードの別ウィンドウでは扱わない)
   const [questionsOpen, setQuestionsOpen] = useState(false)
   const questions = useQuestions(pdfUrl)
   // 発表者モードのウィンドウは、開いたらすぐ「全画面にする」確認を出す
@@ -113,7 +113,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   // メモを保存したら、Remote などにも知らせる(sendStatus は、この下の WebSocket のフックが返す)
   const sendRef = useRef<(s: ViewerStatus) => void>(() => {})
   // 知らせるのは、保存したページではなく「いま表示中のページ」(保存を待つ間にページが変わっても、古いページを知らせない)
-  // 発表者モードの別ウィンドウ(傾聴者に見せる画面)には、メモを出さない
+  // 発表者モードの別ウィンドウ(聞き手に見せる画面)には、メモを出さない
   const note = useNote(pdfUrl, page, () => sendRef.current({ page_index: latest.current.page, pdf_path: pdfUrl }), !presenter)
 
   const syncPage = usePageSync(
@@ -327,7 +327,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           <span className="text-base font-medium text-gray-700" aria-live="polite">
             ページ <span>{page}</span> / <span>{total}</span>
           </span>
-          {/* 発表者モードの別ウィンドウは、傾聴者みんなが見る画面なので、操作のボタンは出さない */}
+          {/* 発表者モードの別ウィンドウは、聞き手みんなが見る画面なので、操作のボタンは出さない */}
           {presenter && (
             <button
               type="button"
@@ -370,7 +370,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             <button
               type="button"
               onClick={openQuestions}
-              title="傾聴者からの質問"
+              title="聞き手からの質問"
               className="relative flex items-center justify-center rounded-lg bg-gray-800 px-3 py-2 text-white transition-colors hover:bg-gray-700"
             >
               <Icon name="forum" className="text-xl" />

@@ -15,7 +15,7 @@ type Props = {
   onClose: () => void
 }
 
-// 傾聴者(会場の後ろの席の人など)が、自分のスマホでスライドを見るための共有ダイアログ
+// 聞き手(会場の後ろの席の人など)が、自分のスマホでスライドを見るための共有ダイアログ
 export default function ShareDialog({ token, audience, canStart, socketStatus, error, onStart, onStop, onClose }: Props) {
   const [copied, setCopied] = useState(false)
 
@@ -64,12 +64,12 @@ export default function ShareDialog({ token, audience, canStart, socketStatus, e
           {url ? (
             <>
               <p className="text-sm text-gray-600">
-                傾聴者のスマホでQRコードを読み取ると、
+                聞き手のスマホでQRコードを読み取ると、
                 <br />
                 スライドが表示されます(ログイン不要)
               </p>
               <div className="flex h-64 w-64 items-center justify-center rounded-lg border border-gray-200 bg-white p-2">
-                <QRCodeSVG value={url} size={240} level="H" marginSize={1} role="img" aria-label="傾聴者用の QR コード" />
+                <QRCodeSVG value={url} size={240} level="H" marginSize={1} role="img" aria-label="聞き手用の QR コード" />
               </div>
               <button
                 type="button"
@@ -96,9 +96,9 @@ export default function ShareDialog({ token, audience, canStart, socketStatus, e
           ) : (
             <>
               <p className="text-sm text-gray-600">
-                共有を始めると、傾聴者用のQRコードが表示されます。
+                共有を始めると、聞き手用のQRコードが表示されます。
                 <br />
-                傾聴者のスマホには、あなたのページ移動に合わせてスライドが表示されます。
+                聞き手のスマホには、あなたのページ移動に合わせてスライドが表示されます。
               </p>
               <button
                 type="button"

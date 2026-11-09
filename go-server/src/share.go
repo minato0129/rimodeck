@@ -1,7 +1,7 @@
 package main
 
-// 傾聴者共有: 発表者が共有を始めると、ログイン不要の共有リンク(トークン)が発行される。
-// 傾聴者は /watch/<token> を開いて PDF を見て、発表者のページ移動を WebSocket で受け取る。
+// 聞き手への共有: 発表者が共有を始めると、ログイン不要の共有リンク(トークン)が発行される。
+// 聞き手は /watch/<token> を開いて PDF を見て、発表者のページ移動を WebSocket で受け取る。
 // 共有は発表者が止めるまで続く(サーバーを再起動すると消える。メモリ上だけで持つ)。
 
 import (
@@ -34,7 +34,7 @@ type share struct {
 	Page      int
 	CreatedAt time.Time
 	audience  map[*websocket.Conn]bool
-	lastAsked map[string]time.Time // 傾聴者(IP)ごとの、最後に質問を送った時刻
+	lastAsked map[string]time.Time // 聞き手(IP)ごとの、最後に質問を送った時刻
 }
 
 var (
@@ -80,7 +80,7 @@ func purgeExpiredSharesLocked() {
 	}
 }
 
-// 共有を止めて、傾聴者に知らせて切断する(shareMu を持った状態で呼ぶ)
+// 共有を止めて、聞き手に知らせて切断する(shareMu を持った状態で呼ぶ)
 func stopShareLocked(s *share) {
 	msg, _ := json.Marshal(ReturnMessage{Type: "share_ended", Status: 200})
 	for ws := range s.audience {
@@ -105,7 +105,7 @@ func notifyViewerLocked(s *share, message ReturnMessage) {
 	}
 }
 
-// 発表者の Viewer に、傾聴者の人数を知らせる(shareMu を持った状態で呼ぶ)
+// 発表者の Viewer に、聞き手の人数を知らせる(shareMu を持った状態で呼ぶ)
 func notifyAudienceCountLocked(s *share) {
 	notifyViewerLocked(s, ReturnMessage{
 		Type:   "audience_count",
@@ -214,7 +214,7 @@ func sharedPdfHandler(c echo.Context) error {
 	return c.File(full)
 }
 
-// 傾聴者に、いまのページを知らせる(shareMu を持った状態で呼ぶ)
+// 聞き手に、いまのページを知らせる(shareMu を持った状態で呼ぶ)
 func broadcastSharePageLocked(s *share) {
 	msg, _ := json.Marshal(ReturnMessage{Type: "share_page", Status: 200, Data: strconv.Itoa(s.Page)})
 	for ws := range s.audience {
@@ -225,7 +225,7 @@ func broadcastSharePageLocked(s *share) {
 	}
 }
 
-// 発表者の Viewer からページの更新が届いたとき、その Viewer の共有の傾聴者に知らせる
+// 発表者の Viewer からページの更新が届いたとき、その Viewer の共有の聞き手に知らせる
 func updateSharePage(viewerID string, page int) {
 	if page < 1 {
 		return
@@ -240,7 +240,7 @@ func updateSharePage(viewerID string, page int) {
 	}
 }
 
-// GET /ws/watch?token=... (ログイン不要): 傾聴者の WebSocket
+// GET /ws/watch?token=... (ログイン不要): 聞き手の WebSocket
 func watchWsHandler(c echo.Context) error {
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
@@ -274,7 +274,7 @@ func watchWsHandler(c echo.Context) error {
 		ws.Close()
 	}()
 
-	// 傾聴者からのメッセージは使わない。切断を待つだけ
+	// 聞き手からのメッセージは使わない。切断を待つだけ
 	for {
 		if _, _, err := ws.ReadMessage(); err != nil {
 			break
