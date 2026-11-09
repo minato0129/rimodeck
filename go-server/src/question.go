@@ -1,7 +1,7 @@
 package main
 
-// 傾聴者から発表者への質問。
-// - 傾聴者が送る(ログイン不要。共有リンクのトークンが鍵)
+// 聞き手から発表者への質問。
+// - 聞き手が送る(ログイン不要。共有リンクのトークンが鍵)
 // - 発表者が見る・「回答済み」にする・削除する(ログイン必須)
 
 import (
@@ -22,7 +22,7 @@ import (
 const (
 	maxQuestionRunes = 200             // 質問の最大文字数
 	maxQuestionPage  = 10000           // ページ番号の上限(明らかに大きすぎる値を弾く)
-	askInterval      = 5 * time.Second // 同じ傾聴者が続けて質問できる間隔
+	askInterval      = 5 * time.Second // 同じ聞き手が続けて質問できる間隔
 )
 
 type askRequest struct {
@@ -30,7 +30,7 @@ type askRequest struct {
 	Content string `json:"content"`
 }
 
-// POST /shared/:token/question (ログイン不要): 傾聴者が質問を送る
+// POST /shared/:token/question (ログイン不要): 聞き手が質問を送る
 func sharedQuestionHandler(c echo.Context) error {
 	req := new(askRequest)
 	if err := c.Bind(req); err != nil {
@@ -54,7 +54,7 @@ func sharedQuestionHandler(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "共有は終了しました。"})
 	}
 
-	// 連続投稿の制限(傾聴者は匿名なので、接続元のアドレスで見分ける)
+	// 連続投稿の制限(聞き手は匿名なので、接続元のアドレスで見分ける)
 	ip := c.RealIP()
 	now := time.Now()
 	if last, ok := s.lastAsked[ip]; ok && now.Sub(last) < askInterval {

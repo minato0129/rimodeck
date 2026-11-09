@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { wsUrl } from './ws'
 
-// 傾聴者の接続状態
+// 聞き手の接続状態
 // - connecting: 接続中 / live: 接続済み / reconnecting: 切れたので再接続中 / ended: 共有が終了した(または無効なリンク)
 export type WatchStatus = 'connecting' | 'live' | 'reconnecting' | 'ended'
 

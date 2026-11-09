@@ -14,7 +14,7 @@ type Props = {
   onClose: () => void
 }
 
-// 傾聴者が、発表者に匿名で質問を送るシート
+// 聞き手が、発表者に匿名で質問を送るシート
 export default function AskForm({ token, total, following, initialPage, draft, onDraftChange, onSent, onClose }: Props) {
   // 開いた時点のページを初期値にする(発表者が先に進んでも、選んだページは変わらない)
   const [page, setPage] = useState(initialPage)

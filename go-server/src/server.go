@@ -184,7 +184,7 @@ func hello(c echo.Context) error {
 				}
 			}
 		} else if receivedMsg.Type == "viewer_update" {
-			// 共有中なら、傾聴者にもページを知らせる
+			// 共有中なら、聞き手にもページを知らせる
 			var viewerState struct {
 				PageIndex int `json:"page_index"`
 			}
@@ -424,13 +424,13 @@ func web_main() {
 
 	e.GET("/ws", hello)
 
-	// 傾聴者共有 (共有の開始・停止はログイン必須、傾聴者の閲覧はログイン不要)
+	// 聞き手への共有 (共有の開始・停止はログイン必須、聞き手の閲覧はログイン不要)
 	e.POST("/share", startShareHandler)
 	e.POST("/share/stop", stopShareHandler)
 	e.GET("/shared/:token/pdf", sharedPdfHandler)
 	e.GET("/ws/watch", watchWsHandler)
 
-	// 傾聴者からの質問 (送信はログイン不要・共有トークンが鍵、閲覧と管理はログイン必須)
+	// 聞き手からの質問 (送信はログイン不要・共有トークンが鍵、閲覧と管理はログイン必須)
 	e.POST("/shared/:token/question", sharedQuestionHandler)
 	e.GET("/questions", listQuestionsHandler)
 	e.POST("/question/answered", answerQuestionHandler)

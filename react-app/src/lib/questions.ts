@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, apiFetch } from './api'
 
-// 傾聴者から届いた質問
+// 聞き手から届いた質問
 export type Question = {
   id: number
   page: number // どのスライドへの質問か
@@ -164,7 +164,7 @@ function sortQuestions(list: Question[]): Question[] {
   return [...list].sort((a, b) => a.page - b.page || a.id - b.id)
 }
 
-// 傾聴者側: 質問を送る(ログイン不要。共有リンクのトークンが鍵)。失敗したら、理由の文章を持つ Error を投げる
+// 聞き手側: 質問を送る(ログイン不要。共有リンクのトークンが鍵)。失敗したら、理由の文章を持つ Error を投げる
 export async function sendQuestion(token: string, page: number, content: string): Promise<void> {
   const response = await fetch(`/shared/${encodeURIComponent(token)}/question`, {
     method: 'POST',

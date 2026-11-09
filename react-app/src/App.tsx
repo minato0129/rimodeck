@@ -9,7 +9,7 @@ import Watch from './pages/Watch'
 // Viewer は pdf.js と QR コードのライブラリを使うので、開いたときに初めて読み込む
 const Viewer = lazy(() => import('./pages/Viewer'))
 
-// ルートは Go 版と同じ URL にしてある(/、/login、/signup、/viewer、/remote)。/watch/:token は傾聴者用の画面(新規)。
+// ルートは Go 版と同じ URL にしてある(/、/login、/signup、/viewer、/remote)。/watch/:token は聞き手用の画面(新規)。
 export default function App() {
   return (
     <Routes>

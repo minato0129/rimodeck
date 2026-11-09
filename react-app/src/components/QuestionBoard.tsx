@@ -7,7 +7,7 @@ type Props = {
   onGoTo: (page: number) => void
 }
 
-// 発表者モードの別ウィンドウ(プロジェクターに映す、傾聴者みんなが見る画面)に出す質問の一覧。
+// 発表者モードの別ウィンドウ(プロジェクターに映す、聞き手みんなが見る画面)に出す質問の一覧。
 // 質問を押すと、そのページへ移る。回答済み・削除は、メインの画面で行う(回答済みにすると、ここから消える)
 export default function QuestionBoard({ questions, currentPage, highlightId, onGoTo }: Props) {
   // 新しい質問を上に。回答済みは映さない
