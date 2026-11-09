@@ -12,7 +12,7 @@ import ShareDialog from '../components/ShareDialog'
 import { fileNameOf } from '../lib/api'
 import { requestFullscreen, useFullscreenChange } from '../lib/fullscreen'
 import { useNote } from '../lib/notes'
-import { startShare, stopShare } from '../lib/share'
+import { isSharing, startShare, stopShare } from '../lib/share'
 import { useQuestions } from '../lib/questions'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
@@ -294,6 +294,18 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
       setShareError('共有を始められませんでした。')
     }
   }, [viewerId, pdfUrl])
+  // 画面を再読み込みしたあとも、共有は続いている。サーバーに聞いて、新しい Viewer につなぎ直す
+  const restoredShare = useRef(false)
+  useEffect(() => {
+    if (presenter || !viewerId || total === 0 || restoredShare.current) return
+    restoredShare.current = true
+    isSharing(pdfUrl)
+      .then((active) => (active ? startShare(pdfUrl, viewerId, latest.current.page) : null))
+      .then((token) => {
+        if (token) setShareToken(token)
+      })
+      .catch((e) => console.error('Failed to restore share:', e))
+  }, [presenter, viewerId, total, pdfUrl])
   const handleStopShare = useCallback(async () => {
     setShareError(null)
     try {
@@ -323,8 +335,8 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           <img src="/logos/logo-light.svg" alt="rimodeck" className="h-6" />
           {!presenter && <span className="text-xs text-gray-500 ml-1">{username}</span>}
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-base font-medium text-gray-700" aria-live="polite">
+        <div className="flex items-center gap-3">
+          <span className="whitespace-nowrap text-base font-medium text-gray-700" aria-live="polite">
             ページ <span>{page}</span> / <span>{total}</span>
           </span>
           {/* 発表者モードの別ウィンドウは、聞き手みんなが見る画面なので、操作のボタンは出さない */}
@@ -342,28 +354,33 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             <button
               type="button"
               onClick={handleLogout}
-              className="text-sm text-gray-500 hover:text-red-500 transition duration-150"
+              title="ログアウト"
+              className="flex items-center text-sm text-gray-500 transition duration-150 hover:text-red-500"
             >
-              ログアウト
+              <Icon name="logout" className="text-xl" />
+              <span className="ml-1 hidden whitespace-nowrap xl:inline">ログアウト</span>
             </button>
           )}
           {!presenter && (
             <Link
               to="/"
+              title="ファイル選択に戻る"
               className="flex items-center justify-center rounded-lg bg-gray-500 px-3 py-2 text-white transition-colors hover:bg-gray-700"
             >
               <Icon name="folder_open" className="text-xl" />
-              <span className="ml-2 hidden text-sm font-medium sm:inline">ファイル選択に戻る</span>
+              <span className="ml-2 hidden whitespace-nowrap text-sm font-medium xl:inline">ファイル選択に戻る</span>
             </Link>
           )}
+          {!presenter && <span aria-hidden="true" className="h-6 w-px bg-gray-300" />}
           {!presenter && (
             <button
               type="button"
               onClick={() => setOverlayOpen(true)}
+              title="プレゼンテーション"
               className="flex items-center justify-center rounded-lg bg-gray-800 px-3 py-2 text-white transition-colors hover:bg-gray-700"
             >
               <Icon name="slideshow" className="text-xl" />
-              <span className="ml-2 hidden text-sm font-medium sm:inline">プレゼンテーション</span>
+              <span className="ml-2 hidden whitespace-nowrap text-sm font-medium xl:inline">プレゼンテーション</span>
             </button>
           )}
           {!presenter && (
@@ -404,10 +421,11 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             <button
               type="button"
               onClick={() => setQrOpen(true)}
+              title="リモートで操作"
               className="flex items-center justify-center rounded-lg bg-primary-blue px-3 py-2 text-white transition-colors hover:bg-primary-blue/80"
             >
               <Icon name="qr_code_scanner" className="text-xl" />
-              <span className="ml-2 hidden text-sm font-medium sm:inline">リモートで操作</span>
+              <span className="ml-2 hidden whitespace-nowrap text-sm font-medium xl:inline">リモートで操作</span>
             </button>
           )}
         </div>

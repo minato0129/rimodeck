@@ -425,6 +425,7 @@ func web_main() {
 	e.GET("/ws", hello)
 
 	// 聞き手への共有 (共有の開始・停止はログイン必須、聞き手の閲覧はログイン不要)
+	e.GET("/share", currentShareHandler)
 	e.POST("/share", startShareHandler)
 	e.POST("/share/stop", stopShareHandler)
 	e.GET("/shared/:token/pdf", sharedPdfHandler)

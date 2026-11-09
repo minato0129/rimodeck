@@ -16,3 +16,16 @@
   --color-viewer-bg: #f6f7f8;
   --color-viewer-text: #333333;
 }
+
+/* Icon コンポーネント(SVG)。大きさは font-size で決まり、tailwind の text-* で変えられる */
+@layer base {
+  .icon {
+    font-size: 24px;
+    width: 1em;
+    height: 1em;
+    flex: none;
+    display: inline-block;
+    vertical-align: middle;
+    user-select: none;
+  }
+}
