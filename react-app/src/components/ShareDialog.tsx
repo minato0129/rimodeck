@@ -1,7 +1,7 @@
 import { QRCodeSVG } from 'qrcode.react'
 import { useEffect, useState } from 'react'
 import Icon from './Icon'
-import { watchUrl } from '../lib/share'
+import { isLocalOrigin, watchUrl } from '../lib/share'
 import type { SocketStatus } from '../lib/viewer'
 
 type Props = {
@@ -68,6 +68,12 @@ export default function ShareDialog({ token, audience, canStart, socketStatus, e
                 <br />
                 スライドが表示されます(ログイン不要)
               </p>
+              {isLocalOrigin() && (
+                <p role="alert" className="w-full rounded-lg bg-amber-50 p-3 text-left text-xs text-amber-800">
+                  このアドレス({location.host})は、聞き手のスマホからは開けません。
+                  PC の IP アドレス(例: 192.168.0.10)や公開しているドメインでこの画面を開き直すと、使える QR コードになります。
+                </p>
+              )}
               <div className="flex h-64 w-64 items-center justify-center rounded-lg border border-gray-200 bg-white p-2">
                 <QRCodeSVG value={url} size={240} level="H" marginSize={1} role="img" aria-label="聞き手用の QR コード" />
               </div>

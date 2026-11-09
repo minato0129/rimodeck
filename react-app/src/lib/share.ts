@@ -21,3 +21,9 @@ export async function stopShare(): Promise<void> {
 export function watchUrl(token: string): string {
   return `${location.origin}/watch/${token}`
 }
+
+// このアドレスのままだと、聞き手のスマホからは開けない(スマホにとっての localhost は、スマホ自身になる)
+export function isLocalOrigin(): boolean {
+  const host = location.hostname
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]' || host.endsWith('.localhost')
+}
