@@ -199,7 +199,7 @@ function Watching({ token }: { token: string }) {
               className="mt-1 flex items-center rounded-full bg-primary-blue px-3 py-1 text-xs font-medium text-white"
             >
               <Icon name="sync" className="mr-1 text-base" />
-              発表者に追従
+              発表者に追従{serverPage !== null && `(${clamp(serverPage)} ページ)`}
             </button>
           )}
         </div>
