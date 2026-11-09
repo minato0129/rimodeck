@@ -185,6 +185,22 @@ func startShareHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"token": token})
 }
 
+// GET /share?pdf_path=... (ログイン必須): その PDF を共有中かどうか。
+// 画面を再読み込みしたあとに、共有を引き継ぐかどうかの判断に使う
+func currentShareHandler(c echo.Context) error {
+	folder, err := getUserSlidepass(c)
+	if err != nil {
+		return c.String(http.StatusUnauthorized, "Unauthorized")
+	}
+	name, _, ok := sharePdfFile(folder, c.QueryParam("pdf_path"))
+
+	shareMu.Lock()
+	defer shareMu.Unlock()
+	purgeExpiredSharesLocked()
+	s, shared := sharesByFolder[folder]
+	return c.JSON(http.StatusOK, map[string]bool{"active": ok && shared && s.PdfName == name})
+}
+
 // POST /share/stop (ログイン必須): 共有を止める
 func stopShareHandler(c echo.Context) error {
 	folder, err := getUserSlidepass(c)

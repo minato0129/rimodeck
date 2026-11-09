@@ -12,7 +12,7 @@ import ShareDialog from '../components/ShareDialog'
 import { fileNameOf } from '../lib/api'
 import { requestFullscreen, useFullscreenChange } from '../lib/fullscreen'
 import { useNote } from '../lib/notes'
-import { startShare, stopShare } from '../lib/share'
+import { isSharing, startShare, stopShare } from '../lib/share'
 import { useQuestions } from '../lib/questions'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
@@ -294,6 +294,18 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
       setShareError('共有を始められませんでした。')
     }
   }, [viewerId, pdfUrl])
+  // 画面を再読み込みしたあとも、共有は続いている。サーバーに聞いて、新しい Viewer につなぎ直す
+  const restoredShare = useRef(false)
+  useEffect(() => {
+    if (presenter || !viewerId || total === 0 || restoredShare.current) return
+    restoredShare.current = true
+    isSharing(pdfUrl)
+      .then((active) => (active ? startShare(pdfUrl, viewerId, latest.current.page) : null))
+      .then((token) => {
+        if (token) setShareToken(token)
+      })
+      .catch((e) => console.error('Failed to restore share:', e))
+  }, [presenter, viewerId, total, pdfUrl])
   const handleStopShare = useCallback(async () => {
     setShareError(null)
     try {

@@ -12,6 +12,14 @@ export async function startShare(pdfPath: string, viewerId: string, page: number
   return body.token
 }
 
+// この PDF を共有中か(画面を再読み込みしたあと、共有を引き継ぐために使う)
+export async function isSharing(pdfPath: string): Promise<boolean> {
+  const response = await apiFetch(`/share?pdf_path=${encodeURIComponent(pdfPath)}`)
+  if (!response.ok) return false
+  const body: { active: boolean } = await response.json()
+  return body.active
+}
+
 export async function stopShare(): Promise<void> {
   const response = await apiFetch('/share/stop', { method: 'POST' })
   if (!response.ok) throw new ApiError(response.status, '共有を止められませんでした。')
