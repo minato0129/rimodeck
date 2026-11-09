@@ -16,7 +16,6 @@ import { isSharing, startShare, stopShare } from '../lib/share'
 import { useQuestions } from '../lib/questions'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
-import { useLogout } from '../lib/useLogout'
 import { openPresenterWindow, usePageSync } from '../lib/sync'
 import { useViewerSocket, type ViewerStatus } from '../lib/viewer'
 
@@ -69,7 +68,6 @@ function isActivatable(target: EventTarget | null): boolean {
 type PresentationProps = { username: string; pdfUrl: string; existingId: string | null; presenter: boolean }
 
 function Presentation({ username, pdfUrl, existingId, presenter }: PresentationProps) {
-  const handleLogout = useLogout()
   const [doc, setDoc] = useState<PdfDoc | null>(null)
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [page, setPage] = useState(0)
@@ -348,17 +346,6 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             >
               <Icon name="fullscreen" className="text-xl" />
               <span className="ml-2 text-sm font-medium">全画面にする</span>
-            </button>
-          )}
-          {!presenter && (
-            <button
-              type="button"
-              onClick={handleLogout}
-              title="ログアウト"
-              className="flex items-center text-sm text-gray-500 transition duration-150 hover:text-red-500"
-            >
-              <Icon name="logout" className="text-xl" />
-              <span className="ml-1 hidden whitespace-nowrap xl:inline">ログアウト</span>
             </button>
           )}
           {!presenter && (
