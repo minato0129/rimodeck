@@ -41,6 +41,8 @@ export const LEVEL_NAMES: Record<Level, string> = { s: '小', m: '中', l: '大'
 export const HEIGHT_CLASS: Record<Level, string> = { s: 'min-h-20', m: 'min-h-32', l: 'min-h-48' }
 // テンプレートの縮図の高さ
 export const HEIGHT_PREVIEW: Record<Level, string> = { s: 'h-3', m: 'h-5', l: 'h-8' }
+// 編集画面で、ボタンを並べて見せるときの高さ(本物より低くして、一画面に収める)
+export const HEIGHT_EDIT: Record<Level, string> = { s: 'h-16', m: 'h-24', l: 'h-36' }
 export const TEXT_CLASS: Record<Level, string> = { s: 'text-base', m: 'text-lg', l: 'text-2xl' }
 export const ICON_CLASS: Record<Level, string> = { s: 'text-[32px]', m: 'text-[48px]', l: 'text-[64px]' }
 
