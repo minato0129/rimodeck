@@ -39,5 +39,6 @@ func Init() {
 	db.AutoMigrate(&models.Users{})
 	db.AutoMigrate(&models.Tokens{})
 	db.AutoMigrate(&models.Question{})
+	db.AutoMigrate(&models.RemoteLayout{})
 
 }

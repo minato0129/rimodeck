@@ -41,6 +41,7 @@ export default defineConfig({
       '/shared': api,
       '/share': api,
       '/question': api,
+      '/remote-layout': api,
       '/ws': { ...api, ws: true },
     },
   },

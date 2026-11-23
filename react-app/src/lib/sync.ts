@@ -51,3 +51,42 @@ export function openPresenterWindow() {
     `width=${screen.availWidth},height=${screen.availHeight},menubar=no,toolbar=no,location=no,status=no`,
   )
 }
+
+const BLANK_CHANNEL = 'rimodeck_blank_sync'
+
+type BlankMessage = { type: 'blank'; blank: boolean } | { type: 'request_blank' }
+
+// 黒画面の入り切りを、メインと発表者モードの別ウィンドウでそろえる(スマホの「黒画面」ボタンはメインに届く)。
+// 発表者モードのウィンドウは、開いた直後に request_blank で現在の状態を尋ねる。
+export function useBlankSync(presenter: boolean, getBlank: () => boolean, onBlank: (blank: boolean) => void) {
+  const channelRef = useRef<BroadcastChannel | null>(null)
+  const getBlankRef = useRef(getBlank)
+  const onBlankRef = useRef(onBlank)
+  useEffect(() => {
+    getBlankRef.current = getBlank
+    onBlankRef.current = onBlank
+  })
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return
+    const channel = new BroadcastChannel(BLANK_CHANNEL)
+    channelRef.current = channel
+    channel.onmessage = (event: MessageEvent<BlankMessage>) => {
+      const message = event.data
+      if (message.type === 'blank') {
+        onBlankRef.current(message.blank)
+      } else if (message.type === 'request_blank' && !presenter) {
+        channel.postMessage({ type: 'blank', blank: getBlankRef.current() } satisfies BlankMessage)
+      }
+    }
+    if (presenter) channel.postMessage({ type: 'request_blank' } satisfies BlankMessage)
+    return () => {
+      channel.close()
+      channelRef.current = null
+    }
+  }, [presenter])
+
+  return useCallback((blank: boolean) => {
+    channelRef.current?.postMessage({ type: 'blank', blank } satisfies BlankMessage)
+  }, [])
+}
