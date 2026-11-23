@@ -7,13 +7,21 @@ type SyncMessage = { type: 'sync_page'; data: { pageNum: number } } | { type: 'r
 
 // - 相手からページ番号が届いたら onPage を呼ぶ
 // - 発表者モードのウィンドウは、開いた直後に request_init で現在のページを尋ねる(メイン側が sync_page で答える)
-export function usePageSync(presenter: boolean, getPage: () => number, onPage: (n: number) => void) {
+// - メイン側は、発表者モードのウィンドウが開いたときに onPresenterOpened を呼ぶ(動画の音を、そちらだけで出すため)
+export function usePageSync(
+  presenter: boolean,
+  getPage: () => number,
+  onPage: (n: number) => void,
+  onPresenterOpened?: () => void,
+) {
   const channelRef = useRef<BroadcastChannel | null>(null)
   const getPageRef = useRef(getPage)
   const onPageRef = useRef(onPage)
+  const onPresenterOpenedRef = useRef(onPresenterOpened)
   useEffect(() => {
     getPageRef.current = getPage
     onPageRef.current = onPage
+    onPresenterOpenedRef.current = onPresenterOpened
   })
 
   useEffect(() => {
@@ -25,6 +33,7 @@ export function usePageSync(presenter: boolean, getPage: () => number, onPage: (
       if (message.type === 'sync_page') {
         onPageRef.current(message.data.pageNum)
       } else if (message.type === 'request_init' && !presenter) {
+        onPresenterOpenedRef.current?.()
         const page = getPageRef.current()
         if (page > 0) channel.postMessage({ type: 'sync_page', data: { pageNum: page } } satisfies SyncMessage)
       }

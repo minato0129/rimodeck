@@ -40,5 +40,6 @@ func Init() {
 	db.AutoMigrate(&models.Tokens{})
 	db.AutoMigrate(&models.Question{})
 	db.AutoMigrate(&models.RemoteLayout{})
+	db.AutoMigrate(&models.PageVideo{})
 
 }

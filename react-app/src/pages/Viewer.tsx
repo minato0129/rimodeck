@@ -4,16 +4,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import NotePanel from '../components/NotePanel'
+import PageVideoLayer from '../components/PageVideoLayer'
 import PresentationOverlay from '../components/PresentationOverlay'
 import QrDialog from '../components/QrDialog'
 import QuestionBoard from '../components/QuestionBoard'
 import QuestionPanel from '../components/QuestionPanel'
 import ShareDialog from '../components/ShareDialog'
+import VideoDialog from '../components/VideoDialog'
 import { fileNameOf } from '../lib/api'
 import { requestFullscreen, useFullscreenChange } from '../lib/fullscreen'
 import { useNote } from '../lib/notes'
 import { isSharing, startShare, stopShare } from '../lib/share'
 import { useQuestions } from '../lib/questions'
+import { useVideos, videoUrl } from '../lib/videos'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
 import { openPresenterWindow, useBlankSync, usePageSync } from '../lib/sync'
@@ -80,6 +83,11 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   // 聞き手からの質問(発表者モードの別ウィンドウでは扱わない)
   const [questionsOpen, setQuestionsOpen] = useState(false)
   const questions = useQuestions(pdfUrl)
+  // ページに紐付けた動画(ページが表示されたら自動で再生する)
+  const videos = useVideos(pdfUrl)
+  const [videoOpen, setVideoOpen] = useState(false)
+  // 発表者モードのウィンドウが開いたら、メインの動画は音を消す(2つの窓から同じ音が二重に出ないように)
+  const [presenterOpened, setPresenterOpened] = useState(false)
   // 発表者モードのウィンドウは、開いたらすぐ「全画面にする」確認を出す
   const [overlayOpen, setOverlayOpen] = useState(presenter)
   const mainRef = useRef<HTMLElement>(null)
@@ -143,6 +151,7 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
         setPage(n)
       }
     },
+    () => setPresenterOpened(true),
   )
 
   const { viewerId, status, sendStatus } = useViewerSocket(
@@ -418,6 +427,21 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           {!presenter && (
             <button
               type="button"
+              onClick={() => setVideoOpen(true)}
+              title="ページの動画"
+              className={`flex items-center justify-center rounded-lg px-3 py-2 text-white transition-colors ${
+                videos.videos.length > 0 ? 'bg-primary-blue hover:bg-primary-blue/80' : 'bg-gray-800 hover:bg-gray-700'
+              }`}
+            >
+              <Icon name="play_circle" className="text-xl" />
+              <span className="ml-2 hidden whitespace-nowrap text-sm font-medium xl:inline">
+                動画{videos.videos.length > 0 ? ` (${videos.videos.length})` : ''}
+              </span>
+            </button>
+          )}
+          {!presenter && (
+            <button
+              type="button"
               onClick={() => setShareOpen(true)}
               title="資料を共有"
               className={`flex items-center justify-center rounded-lg px-3 py-2 text-white transition-colors ${
@@ -451,6 +475,10 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
         >
           <div className="flex flex-1 min-h-0 w-full items-center justify-center overflow-hidden p-0">
             <canvas ref={canvasRef} className="max-h-full max-w-full h-auto w-auto shadow-md" />
+            <PageVideoLayer
+              src={videos.byPage.has(page) ? videoUrl(pdfUrl, videos.byPage.get(page)!) : null}
+              muted={!presenter && presenterOpened}
+            />
             {blank && (
               <div
                 role="button"
@@ -521,6 +549,19 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
           onStart={handleStartShare}
           onStop={handleStopShare}
           onClose={closeShare}
+        />
+      )}
+      {videoOpen && !presenter && (
+        <VideoDialog
+          page={page}
+          videos={videos.videos}
+          current={videos.byPage.get(page)}
+          busy={videos.busy}
+          error={videos.error}
+          onUpload={videos.upload}
+          onRemove={videos.remove}
+          onGoTo={goTo}
+          onClose={() => setVideoOpen(false)}
         />
       )}
       {qrOpen && !presenter && <QrDialog viewerId={viewerId} username={username} status={status} onClose={closeQr} />}

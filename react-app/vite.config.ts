@@ -42,6 +42,7 @@ export default defineConfig({
       '/share': api,
       '/question': api,
       '/remote-layout': api,
+      '/video': api, // /video, /videos, /video/:id, /video/delete
       '/ws': { ...api, ws: true },
     },
   },

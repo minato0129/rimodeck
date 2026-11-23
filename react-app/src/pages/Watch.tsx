@@ -5,7 +5,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import AskForm from '../components/AskForm'
 import Icon from '../components/Icon'
+import PageVideoLayer from '../components/PageVideoLayer'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
+import { sharedVideoUrl, useSharedVideos } from '../lib/videos'
 import { useWatchSocket } from '../lib/watch'
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -47,6 +49,9 @@ function Watching({ token }: { token: string }) {
   const clamp = (n: number) => Math.min(Math.max(n, 1), Math.max(total, 1))
   const following = manualPage === null
   const page = serverPage === null ? 0 : clamp(manualPage ?? serverPage)
+  // 発表者がページに紐付けた動画。見ているページに動画があれば、自動で(音なしで)流れる
+  const videos = useSharedVideos(token, status === 'live')
+  const pageVideo = videos.get(page)
 
   // PDF を読み込む
   useEffect(() => {
@@ -151,6 +156,7 @@ function Watching({ token }: { token: string }) {
         className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-gray-100"
       >
         <canvas ref={canvasRef} className="h-auto max-h-full w-auto max-w-full shadow-md" />
+        <PageVideoLayer src={pageVideo ? sharedVideoUrl(token, pageVideo) : null} muted />
         {sentNotice && (
           <div role="status" className="absolute top-3 rounded-full bg-gray-900 px-4 py-2 text-sm text-white shadow">
             質問を送りました

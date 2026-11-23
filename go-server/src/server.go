@@ -359,6 +359,9 @@ func deletePdfHandler(c echo.Context) error {
         log.Printf("Failed to delete questions for %s: %v", fileName, err)
     }
 
+    // この PDF に紐付けた動画も消す(失敗しても、ファイルは削除済みなので続行)
+    deleteVideosOfPdf(user.UserID, slideFolder, fileName)
+
     log.Printf("Successfully deleted file: %s", fullPath)
     return c.JSON(http.StatusOK, map[string]string{"message": "ファイルは正常に削除されました。"})
 }
@@ -417,6 +420,12 @@ func web_main() {
 	//PDF削除のエンドポイントを追加
     e.POST("/delete-pdf", deletePdfHandler)
 
+	// ページに紐付ける動画 (アップロード・一覧・削除・配信)
+	e.POST("/video", uploadVideoHandler)
+	e.GET("/videos", listVideosHandler)
+	e.POST("/video/delete", deleteVideoHandler)
+	e.GET("/video/:id", serveVideoHandler)
+
 	// 認証エンドポイント
 	e.POST("/signup", controllers.SignUp)
 	e.POST("/login", controllers.Login)
@@ -432,6 +441,8 @@ func web_main() {
 	e.POST("/share", startShareHandler)
 	e.POST("/share/stop", stopShareHandler)
 	e.GET("/shared/:token/pdf", sharedPdfHandler)
+	e.GET("/shared/:token/videos", sharedVideosHandler)
+	e.GET("/shared/:token/video/:id", sharedVideoHandler)
 	e.GET("/ws/watch", watchWsHandler)
 
 	// 聞き手からの質問 (送信はログイン不要・共有トークンが鍵、閲覧と管理はログイン必須)
