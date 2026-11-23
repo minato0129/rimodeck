@@ -1,10 +1,14 @@
 // スマホのリモート画面の編集モード。ボタンの追加・削除・並べ替え・大きさ・色を決める。
+import { useState } from 'react'
 import Icon from './Icon'
 import {
   BUTTONS,
   BUTTON_IDS,
   COLORS,
+  HEIGHT_PREVIEW,
   LEVEL_NAMES,
+  TEMPLATES,
+  matchTemplate,
   newButton,
   type ButtonColor,
   type ButtonWidth,
@@ -31,6 +35,9 @@ const WIDTHS: [ButtonWidth, string][] = [
 
 export default function RemoteLayoutEditor({ draft, onChange, onSave, onCancel, onReset, saving, error }: Props) {
   const buttons = draft.buttons
+  const matched = matchTemplate(draft)
+  // どのテンプレートとも違う(以前に自分で調整した)ときは、細かい調整を開いた状態で始める
+  const [detailOpen, setDetailOpen] = useState(() => !matched)
   const unused = BUTTON_IDS.filter((id) => !buttons.some((b) => b.id === id))
 
   function update(index: number, patch: Partial<LayoutButton>) {
@@ -49,9 +56,51 @@ export default function RemoteLayoutEditor({ draft, onChange, onSave, onCancel, 
 
   return (
     <div className="flex grow flex-col gap-3 p-4 pt-2">
-      <p className="text-sm text-gray-600">
-        ボタンの並びを決めます。上から順に、半分幅のボタンは 2 つずつ横に並びます。
-      </p>
+      <section aria-labelledby="template-title">
+        <h2 id="template-title" className="mb-2 text-sm font-bold text-gray-700">
+          テンプレートから選ぶ
+        </h2>
+        <ul className="grid grid-cols-3 gap-2">
+          {TEMPLATES.map((template) => {
+            const selected = matched?.id === template.id
+            return (
+              <li key={template.id}>
+                <button
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => onChange(template.layout)}
+                  className={`flex h-full w-full flex-col gap-2 rounded-[0.75rem] bg-white p-2 text-left shadow ${
+                    selected ? 'ring-2 ring-primary-blue' : ''
+                  }`}
+                >
+                  <LayoutPreview layout={template.layout} />
+                  <span className="text-sm font-bold text-gray-800">{template.name}</span>
+                  <span className="text-xs leading-snug text-gray-500">{template.description}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        {!matched && (
+          <p className="mt-2 text-xs text-gray-500">いまは、テンプレートとは違う、自分で調整した配置です。</p>
+        )}
+      </section>
+
+      <button
+        type="button"
+        aria-expanded={detailOpen}
+        onClick={() => setDetailOpen((open) => !open)}
+        className="flex items-center justify-between rounded-[0.75rem] bg-gray-100 px-4 py-3 text-sm font-bold text-gray-700"
+      >
+        細かく調整する
+        <Icon name="expand_more" className={`text-2xl transition-transform ${detailOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {detailOpen && (
+        <>
+          <p className="text-sm text-gray-600">
+            ボタンの並びを決めます。上から順に、半分幅のボタンは 2 つずつ横に並びます。
+          </p>
 
       {buttons.length === 0 && (
         <p className="rounded-[0.75rem] bg-yellow-500/20 p-3 text-sm text-yellow-700">
@@ -143,6 +192,9 @@ export default function RemoteLayoutEditor({ draft, onChange, onSave, onCancel, 
             ))}
           </div>
         </div>
+      )}
+
+        </>
       )}
 
       {error && (
@@ -242,5 +294,21 @@ function IconButton({
     >
       <Icon name={icon} className="text-xl" />
     </button>
+  )
+}
+
+// テンプレートの見た目の縮図(幅・高さ・色だけを小さく描く)
+function LayoutPreview({ layout }: { layout: RemoteLayout }) {
+  return (
+    <div aria-hidden="true" className="grid grid-cols-2 gap-1 rounded-md bg-gray-100 p-1">
+      {layout.buttons.map((b) => (
+        <div
+          key={b.id}
+          className={`rounded-sm border border-gray-200 ${HEIGHT_PREVIEW[b.height]} ${COLORS[b.color].swatch} ${
+            b.width === 'full' ? 'col-span-2' : ''
+          }`}
+        />
+      ))}
+    </div>
   )
 }

@@ -39,6 +39,8 @@ export const COLORS: Record<ButtonColor, { name: string; button: string; swatch:
 export const LEVEL_NAMES: Record<Level, string> = { s: '小', m: '中', l: '大' }
 // 高さは「これ以上」の値。余った空きは、行で分け合って広がる
 export const HEIGHT_CLASS: Record<Level, string> = { s: 'min-h-20', m: 'min-h-32', l: 'min-h-48' }
+// テンプレートの縮図の高さ
+export const HEIGHT_PREVIEW: Record<Level, string> = { s: 'h-3', m: 'h-5', l: 'h-8' }
 export const TEXT_CLASS: Record<Level, string> = { s: 'text-base', m: 'text-lg', l: 'text-2xl' }
 export const ICON_CLASS: Record<Level, string> = { s: 'text-[32px]', m: 'text-[48px]', l: 'text-[64px]' }
 
@@ -55,6 +57,54 @@ export const DEFAULT_LAYOUT: RemoteLayout = {
 }
 
 export const MAX_BUTTONS = BUTTON_IDS.length
+
+const btn = (
+  id: RemoteCommand,
+  width: ButtonWidth,
+  height: Level,
+  color: ButtonColor = 'white',
+  textSize: Level = 'm',
+): LayoutButton => ({ id, width, height, color, textSize })
+
+// 選べるテンプレート。細かい調整は、選んだあとでもできる
+export type LayoutTemplate = { id: string; name: string; description: string; layout: RemoteLayout }
+export const TEMPLATES: LayoutTemplate[] = [
+  {
+    id: 'simple',
+    name: 'シンプル',
+    description: '前・次を左右に並べる(初期状態)',
+    layout: DEFAULT_LAYOUT,
+  },
+  {
+    id: 'next-large',
+    name: '次を大きく',
+    description: '次のスライドを大きく。片手で進めやすい',
+    layout: { buttons: [btn('next', 'full', 'l', 'blue', 'l'), btn('prev', 'full', 's', 'gray', 'm')] },
+  },
+  {
+    id: 'full-set',
+    name: 'ひととおり',
+    description: '前・次に加えて、最初へ・最後へ・黒画面',
+    layout: {
+      buttons: [
+        btn('prev', 'half', 'l'),
+        btn('next', 'half', 'l', 'blue', 'm'),
+        btn('first', 'half', 's', 'gray', 's'),
+        btn('last', 'half', 's', 'gray', 's'),
+        btn('blank', 'full', 's', 'dark', 's'),
+      ],
+    },
+  },
+]
+
+export function sameLayout(a: RemoteLayout, b: RemoteLayout): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+// いまの配置がテンプレートのどれかと同じなら、そのテンプレート
+export function matchTemplate(layout: RemoteLayout): LayoutTemplate | undefined {
+  return TEMPLATES.find((t) => sameLayout(t.layout, layout))
+}
 
 // サーバーの配置は信用しすぎず、知っている値だけ通す
 function sanitize(value: unknown): RemoteLayout | null {
