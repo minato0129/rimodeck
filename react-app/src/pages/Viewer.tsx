@@ -16,7 +16,7 @@ import { isSharing, startShare, stopShare } from '../lib/share'
 import { useQuestions } from '../lib/questions'
 import { openPdf, renderFitted, type PdfDoc, type RenderHandle } from '../lib/pdf'
 import { getUsername } from '../lib/session'
-import { openPresenterWindow, usePageSync } from '../lib/sync'
+import { openPresenterWindow, useBlankSync, usePageSync } from '../lib/sync'
 import { useViewerSocket, type ViewerStatus } from '../lib/viewer'
 
 export default function Viewer() {
@@ -106,6 +106,8 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
     setPage(n)
   }, [])
   const next = useCallback(() => goTo(latest.current.page + 1), [goTo])
+  const first = useCallback(() => goTo(1), [goTo])
+  const last = useCallback(() => goTo(latest.current.total), [goTo])
   const prev = useCallback(() => goTo(latest.current.page - 1), [goTo])
 
   // メモを保存したら、Remote などにも知らせる(sendStatus は、この下の WebSocket のフックが返す)
@@ -113,6 +115,21 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
   // 知らせるのは、保存したページではなく「いま表示中のページ」(保存を待つ間にページが変わっても、古いページを知らせない)
   // 発表者モードの別ウィンドウ(聞き手に見せる画面)には、メモを出さない
   const note = useNote(pdfUrl, page, () => sendRef.current({ page_index: latest.current.page, pdf_path: pdfUrl }), !presenter)
+
+  // 黒画面(スマホの「黒画面」ボタン)。発表者モードの別ウィンドウも同じ状態にする
+  const [blank, setBlank] = useState(false)
+  const blankRef = useRef(false)
+  useEffect(() => {
+    blankRef.current = blank
+  })
+  const syncBlank = useBlankSync(presenter, () => blankRef.current, setBlank)
+  const changeBlank = useCallback(
+    (value: boolean) => {
+      setBlank(value)
+      syncBlank(value)
+    },
+    [syncBlank],
+  )
 
   const syncPage = usePageSync(
     presenter,
@@ -138,6 +155,15 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
             break
           case 'prev':
             prev()
+            break
+          case 'first':
+            first()
+            break
+          case 'last':
+            last()
+            break
+          case 'blank':
+            changeBlank(!blankRef.current)
             break
           case 'ping':
             // Remote に、いまのページを知らせる
@@ -425,6 +451,17 @@ function Presentation({ username, pdfUrl, existingId, presenter }: PresentationP
         >
           <div className="flex flex-1 min-h-0 w-full items-center justify-center overflow-hidden p-0">
             <canvas ref={canvasRef} className="max-h-full max-w-full h-auto w-auto shadow-md" />
+            {blank && (
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="黒画面を解除"
+                title="クリックで黒画面を解除"
+                onClick={() => changeBlank(false)}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && changeBlank(false)}
+                className="absolute inset-0 z-10 cursor-pointer bg-black"
+              />
+            )}
             {loadState !== 'ready' && (
               <div role={loadState === 'error' ? 'alert' : 'status'} className="absolute text-xl font-bold">
                 {loadState === 'error' ? `${fileName} の読み込みに失敗しました。` : `${fileName} を読み込み中...`}

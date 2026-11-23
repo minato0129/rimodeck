@@ -1,8 +1,21 @@
 // 移植元: go-server/src/phone.html / assets/js/phone.js
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
-import { useRemote, type ConnectionState } from '../lib/remote'
+import RemoteLayoutEditor from '../components/RemoteLayoutEditor'
+import { useRemote, type ConnectionState, type RemoteCommand } from '../lib/remote'
+import {
+  BUTTONS,
+  COLORS,
+  DEFAULT_LAYOUT,
+  HEIGHT_CLASS,
+  ICON_CLASS,
+  TEXT_CLASS,
+  resetLayout,
+  saveLayout,
+  useRemoteLayout,
+  type RemoteLayout,
+} from '../lib/remoteLayout'
 
 const STATUS: Record<ConnectionState, { text: string; box: string; dot: string }> = {
   'missing-id': {
@@ -25,8 +38,47 @@ export default function Remote() {
   )
   const status = STATUS[state]
 
-  function sendSlide(command: 'next' | 'prev') {
+  function sendCommand(command: RemoteCommand) {
     if (!send(command)) alert('サーバーに接続されていないか、正しく読み込まれていません。')
+  }
+
+  // 編集モード。draft が null のときは、通常の操作画面
+  const { layout, setLayout, error: loadError } = useRemoteLayout(viewerId)
+  const [draft, setDraft] = useState<RemoteLayout | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const editing = draft !== null
+
+  function startEdit() {
+    setDraft(layout ?? DEFAULT_LAYOUT)
+    setEditError(null)
+  }
+  async function finishEdit() {
+    if (!draft || !viewerId) return
+    setSaving(true)
+    setEditError(null)
+    try {
+      setLayout(await saveLayout(viewerId, draft))
+      setDraft(null)
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+  async function resetEdit() {
+    if (!viewerId || !window.confirm('ボタンの配置を、初期状態に戻しますか?')) return
+    setSaving(true)
+    setEditError(null)
+    try {
+      await resetLayout(viewerId)
+      setLayout(DEFAULT_LAYOUT)
+      setDraft(null)
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
   }
 
   // この画面の角丸は、現行版の tailwind.config(lg=0.75rem, xl=1rem)に合わせて個別に指定する。
@@ -37,12 +89,19 @@ export default function Remote() {
         <div className="flex size-12 shrink-0 items-center">
           <Icon name="arrow_back_ios_new" className="text-gray-800 text-3xl" />
         </div>
-        <h1 className="text-gray-800 text-xl font-bold tracking-tight">プレゼンテーション リモート</h1>
+        <h1 className="text-gray-800 text-xl font-bold tracking-tight">
+          {editing ? 'ボタンの編集' : 'プレゼンテーション リモート'}
+        </h1>
         <div className="flex w-12 items-center justify-end">
           <button
             type="button"
-            aria-label="設定"
-            className="flex items-center justify-center rounded-[0.75rem] h-12 text-gray-800 p-0"
+            aria-label={editing ? '編集モードを終了' : '編集モード'}
+            aria-pressed={editing}
+            onClick={() => (editing ? setDraft(null) : startEdit())}
+            disabled={!viewerId || layout === undefined}
+            className={`flex items-center justify-center rounded-[0.75rem] h-12 p-0 disabled:opacity-30 ${
+              editing ? 'text-primary-blue' : 'text-gray-800'
+            }`}
           >
             <Icon name="settings" className="text-3xl" />
           </button>
@@ -59,24 +118,41 @@ export default function Remote() {
         </div>
       </div>
 
-      <div className="grow flex justify-between items-stretch p-4 gap-4">
-        {(
-          [
-            ['prev', 'arrow_back_ios', '前のスライド'],
-            ['next', 'arrow_forward_ios', '次のスライド'],
-          ] as const
-        ).map(([command, icon, label]) => (
-          <button
-            key={command}
-            type="button"
-            onClick={() => sendSlide(command)}
-            className="flex flex-col items-center justify-center gap-4 rounded-[1rem] bg-white text-gray-700 flex-1 shadow-lg active:shadow-none active:bg-gray-100 transition-all"
-          >
-            <Icon name={icon} className="text-gray-500 text-[48px]" />
-            <span className="text-lg font-bold">{label}</span>
-          </button>
-        ))}
-      </div>
+      {draft ? (
+        <RemoteLayoutEditor
+          draft={draft}
+          onChange={setDraft}
+          onSave={finishEdit}
+          onCancel={() => setDraft(null)}
+          onReset={resetEdit}
+          saving={saving}
+          error={editError}
+        />
+      ) : (
+        <>
+          {loadError && (
+            <p role="alert" className="mx-4 rounded-[0.75rem] bg-yellow-500/20 p-2 text-center text-xs text-yellow-700">
+              保存した配置を読み込めなかったため、初期の配置で表示しています。({loadError})
+            </p>
+          )}
+          {/* 余った高さは、行で分け合って広がる。初期状態は 1 行なので、これまでと同じ見た目になる */}
+          <div className="grid grow grid-cols-2 gap-4 p-4">
+            {layout?.buttons.map((button) => (
+              <button
+                key={button.id}
+                type="button"
+                onClick={() => sendCommand(button.id)}
+                className={`flex flex-col items-center justify-center gap-3 rounded-[1rem] shadow-lg transition-all active:shadow-none ${
+                  button.width === 'full' ? 'col-span-2' : ''
+                } ${HEIGHT_CLASS[button.height]} ${COLORS[button.color].button}`}
+              >
+                <Icon name={BUTTONS[button.id].icon} className={`opacity-70 ${ICON_CLASS[button.textSize]}`} />
+                <span className={`font-bold ${TEXT_CLASS[button.textSize]}`}>{BUTTONS[button.id].label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

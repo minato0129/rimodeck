@@ -81,6 +81,8 @@ func hello(c echo.Context) error {
 	}
 	wsMap[uid][ws] = true
 	mu.Unlock()
+	// ログイン中の PC なら、この ID の持ち主を記録する(スマホの配置の保存先を引くため)
+	recordViewerOwner(c, uid)
 	log.Printf("New connection established for UID: %s. Total viewers for this UID: %d\n", uid, len(wsMap[uid]))
 
 
@@ -99,6 +101,7 @@ func hello(c echo.Context) error {
 			delete(viewers, ws)
 			if len(viewers) == 0 {
 				delete(wsMap, uid)
+				delete(viewerOwners, uid)
 				// 全てのViewerが切断された場合のみ、remoteMapも掃除することを検討しても良いが、
 				// Remoteが先に接続している可能性もあるので、ここではuidキーごと削除するのは慎重にする
 				// とりあえず、Viewerが0ならUID自体を消す
@@ -433,6 +436,9 @@ func web_main() {
 
 	// 聞き手からの質問 (送信はログイン不要・共有トークンが鍵、閲覧と管理はログイン必須)
 	e.POST("/shared/:token/question", sharedQuestionHandler)
+	e.GET("/remote-layout", getRemoteLayoutHandler)
+	e.PUT("/remote-layout", saveRemoteLayoutHandler)
+	e.DELETE("/remote-layout", resetRemoteLayoutHandler)
 	e.GET("/questions", listQuestionsHandler)
 	e.POST("/question/answered", answerQuestionHandler)
 	e.POST("/question/delete", deleteQuestionHandler)
